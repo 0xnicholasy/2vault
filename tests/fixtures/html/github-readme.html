@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>fastify/fastify: Fast and low overhead web framework, for Node.js</title>
+</head>
+<body>
+  <nav>
+    <a href="/">GitHub</a>
+    <a href="/fastify">fastify</a>
+    <a href="/fastify/fastify">fastify</a>
+  </nav>
+  <div role="main">
+    <article>
+      <h1>Fastify</h1>
+
+      <p><strong>Fast and low overhead web framework, for Node.js</strong></p>
+
+      <p><a href="https://www.fastify.io">https://www.fastify.io</a></p>
+
+      <h2>Installation</h2>
+
+      <p>Create a new project folder and install Fastify with npm:</p>
+
+      <pre><code class="language-bash">npm install fastify</code></pre>
+
+      <h2>Quick Start</h2>
+
+      <p>Create a <code>server.js</code> file and add the following content:</p>
+
+      <pre><code class="language-javascript">const fastify = require('fastify')({ logger: true })
+
+fastify.get('/', async (request, reply) => {
+  return { hello: 'world' }
+})
+
+const start = async () => {
+  try {
+    await fastify.listen({ port: 3000 })
+  } catch (err) {
+    fastify.log.error(err)
+    process.exit(1)
+  }
+}
+start()</code></pre>
+
+      <h2>Features</h2>
+
+      <ul>
+        <li><strong>Highly performant:</strong> as far as we know, Fastify is one of the fastest web frameworks in town.</li>
+        <li><strong>Extensible:</strong> Fastify is fully extensible via its hooks, plugins and decorators.</li>
+        <li><strong>Schema based:</strong> it is recommended to use JSON Schema to validate your routes and serialize your outputs.</li>
+        <li><strong>Logging:</strong> logs are extremely important but are costly; we chose the best logger to almost remove this cost, Pino!</li>
+        <li><strong>Developer friendly:</strong> the framework is built to be very expressive and to help developers in their daily use.</li>
+        <li><strong>TypeScript ready:</strong> we work hard to maintain a TypeScript type declaration file.</li>
+      </ul>
+
+      <h2>Benchmarks</h2>
+
+      <p>Machine: EX41S-SSD, Intel Core i7, 4Ghz, 64GB RAM, 4C/8T, SSD.</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Framework</th>
+            <th>Req/sec</th>
+            <th>Latency</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Fastify</td>
+            <td>76,835</td>
+            <td>1.23ms</td>
+          </tr>
+          <tr>
+            <td>Express</td>
+            <td>15,978</td>
+            <td>5.94ms</td>
+          </tr>
+          <tr>
+            <td>Koa</td>
+            <td>38,185</td>
+            <td>2.49ms</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>License</h2>
+
+      <p>Licensed under <a href="./LICENSE">MIT</a>.</p>
+    </article>
+  </div>
+  <footer>
+    <p>GitHub, Inc.</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Understanding Rust's Ownership Model - Tech Blog</title>
+  <meta name="author" content="Jane Smith">
+  <meta property="article:published_time" content="2025-03-15T10:00:00Z">
+  <meta property="og:title" content="Understanding Rust's Ownership Model">
+  <meta name="description" content="A deep dive into how Rust manages memory safely without a garbage collector.">
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/blog">Blog</a>
+    <a href="/about">About</a>
+  </nav>
+  <header>
+    <h1>Tech Blog</h1>
+  </header>
+  <article>
+    <h1>Understanding Rust's Ownership Model</h1>
+    <p class="byline">By Jane Smith | March 15, 2025</p>
+
+    <p>Rust's ownership system is the language's most unique feature, and it enables Rust to make memory safety guarantees without needing a garbage collector. In this post, we'll explore how ownership works and why it matters.</p>
+
+    <h2>What is Ownership?</h2>
+
+    <p>Ownership is a set of rules that govern how a Rust program manages memory. All programs have to manage the way they use a computer's memory while running. Some languages have garbage collection that regularly looks for no-longer-used memory as the program runs; in other languages, the programmer must explicitly allocate and free the memory.</p>
+
+    <p>Rust uses a third approach: memory is managed through a system of ownership with a set of rules that the compiler checks. If any of the rules are violated, the program won't compile.</p>
+
+    <h2>The Three Rules</h2>
+
+    <p>There are three fundamental rules of ownership in Rust:</p>
+
+    <ol>
+      <li>Each value in Rust has an <em>owner</em>.</li>
+      <li>There can only be one owner at a time.</li>
+      <li>When the owner goes out of scope, the value will be dropped.</li>
+    </ol>
+
+    <h2>Code Example</h2>
+
+    <p>Here's a simple example demonstrating ownership transfer:</p>
+
+    <pre><code class="language-rust">fn main() {
+    let s1 = String::from("hello");
+    let s2 = s1; // s1 is moved to s2
+
+    // println!("{}", s1); // This would cause a compile error!
+    println!("{}", s2); // This works fine
+}</code></pre>
+
+    <p>When we assign <code>s1</code> to <code>s2</code>, the <code>String</code> data is copied, meaning we copy the pointer, the length, and the capacity that are on the stack. We do not copy the data on the heap.</p>
+
+    <h2>Borrowing and References</h2>
+
+    <p>What if we want to let a function use a value but not take ownership? Rust calls this <em>borrowing</em>, and it uses references to achieve it:</p>
+
+    <pre><code class="language-rust">fn calculate_length(s: &amp;String) -> usize {
+    s.len()
+}
+
+fn main() {
+    let s1 = String::from("hello");
+    let len = calculate_length(&amp;s1);
+    println!("The length of '{}' is {}.", s1, len);
+}</code></pre>
+
+    <p>The <code>&amp;s1</code> syntax lets us create a reference that <em>refers</em> to the value of <code>s1</code> but does not own it. Because it does not own it, the value it points to will not be dropped when the reference stops being used.</p>
+
+    <h2>Conclusion</h2>
+
+    <p>Rust's ownership model may seem restrictive at first, but it eliminates entire categories of bugs at compile time. No null pointer dereferences, no dangling pointers, no data races. Once you internalize the rules, you'll find that they guide you toward writing better, more efficient code.</p>
+
+    <p>In the next post, we'll dive into lifetimes and how they relate to ownership. Stay tuned!</p>
+  </article>
+  <footer>
+    <p>Copyright 2025 Tech Blog. All rights reserved.</p>
+  </footer>
+  <script>
+    console.log("tracking analytics...");
+  </script>
+</body>
+</html>

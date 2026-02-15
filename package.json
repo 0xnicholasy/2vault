@@ -1,0 +1,38 @@
+{
+  "name": "2vault",
+  "version": "0.0.1",
+  "description": "AI-powered Chrome extension that digests bookmarks into your Obsidian vault",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.3.0",
+    "@types/bun": "latest",
+    "@types/chrome": "^0.1.36",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/turndown": "^5.0.6",
+    "@vitejs/plugin-react": "^5.1.4",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
+    "@mozilla/readability": "^0.6.0",
+    "linkedom": "^0.18.12",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-icons": "^5.5.0",
+    "turndown": "^7.2.2"
+  }
+}

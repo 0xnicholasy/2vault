@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Loading...</title>
+</head>
+<body>
+  <div id="app">
+    <p>Please wait while the content loads...</p>
+  </div>
+  <script>
+    // SPA that loads content dynamically
+    fetch('/api/content').then(r => r.json()).then(renderPage);
+  </script>
+</body>
+</html>
