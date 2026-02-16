@@ -1,4 +1,5 @@
 import type { Config, VaultContext, ProcessingResult } from "@/core/types.ts";
+import type { ProcessingState } from "@/background/messages.ts";
 
 interface SyncStorage {
   apiKey: string;
@@ -12,6 +13,7 @@ interface LocalStorage {
   vaultContextCache: VaultContext;
   vaultContextTimestamp: number;
   processingHistory: ProcessingResult[];
+  processingState: ProcessingState;
 }
 
 export async function getSyncStorage<K extends keyof SyncStorage>(
@@ -59,4 +61,19 @@ export async function getConfig(): Promise<Config> {
     vaultApiKey: vaultApiKey ?? "",
     defaultFolder: defaultFolder ?? "Inbox",
   };
+}
+
+export async function getProcessingState(): Promise<ProcessingState | null> {
+  const state = await getLocalStorage("processingState");
+  return state ?? null;
+}
+
+export async function setProcessingState(
+  state: ProcessingState
+): Promise<void> {
+  await setLocalStorage("processingState", state);
+}
+
+export async function clearProcessingState(): Promise<void> {
+  await chrome.storage.local.remove("processingState");
 }

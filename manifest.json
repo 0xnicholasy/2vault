@@ -3,7 +3,7 @@
   "name": "2Vault",
   "version": "0.0.1",
   "description": "AI-powered bookmark digester for Obsidian",
-  "permissions": ["bookmarks", "activeTab", "storage", "scripting"],
+  "permissions": ["bookmarks", "activeTab", "storage", "scripting", "notifications"],
   "host_permissions": [
     "https://x.com/*",
     "https://twitter.com/*",

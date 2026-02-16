@@ -1,9 +1,13 @@
-import { StrictMode, useState } from "react";
+import { StrictMode, useState, useEffect, useCallback } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { IoSettingsSharp, IoBookmarks, IoStatsChart } from "react-icons/io5";
+import type { ProcessingState } from "@/background/messages.ts";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Settings } from "./components/Settings";
+import { BookmarkBrowser } from "./components/BookmarkBrowser";
+import { ProcessingModal } from "./components/ProcessingModal";
+import { getProcessingState } from "@/utils/storage";
 import "./styles/popup.css";
 
 type Tab = "settings" | "bookmarks" | "status";
@@ -17,12 +21,58 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: "settings", label: "Settings", icon: <IoSettingsSharp />, disabled: false },
-  { id: "bookmarks", label: "Bookmarks", icon: <IoBookmarks />, disabled: true },
+  { id: "bookmarks", label: "Bookmarks", icon: <IoBookmarks />, disabled: false },
   { id: "status", label: "Status", icon: <IoStatsChart />, disabled: true },
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>("settings");
+  const [activeTab, setActiveTab] = useState<Tab>("bookmarks");
+  const [processingState, setProcessingState] = useState<ProcessingState | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  // Check for active processing on mount
+  useEffect(() => {
+    getProcessingState().then((state) => {
+      if (state) {
+        setProcessingState(state);
+        if (state.active) {
+          setShowModal(true);
+        }
+      }
+    });
+  }, []);
+
+  // Listen for processing state changes
+  useEffect(() => {
+    const listener = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      area: string
+    ) => {
+      if (area === "local" && changes["processingState"]?.newValue) {
+        const newState = changes["processingState"].newValue as ProcessingState;
+        setProcessingState(newState);
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, []);
+
+  const handleStartProcessing = useCallback((urls: string[]) => {
+    chrome.runtime.sendMessage(
+      { type: "START_PROCESSING", urls },
+      (response) => {
+        if (response?.type === "PROCESSING_STARTED") {
+          setShowModal(true);
+        }
+      }
+    );
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setShowModal(false);
+  }, []);
+
+  const isProcessing = processingState?.active ?? false;
 
   return (
     <div className="app">
@@ -49,10 +99,22 @@ function App() {
       <main className="tab-content">
         <ErrorBoundary>
           {activeTab === "settings" && <Settings />}
-          {activeTab === "bookmarks" && <div className="placeholder">Bookmarks (Sprint 2.2)</div>}
+          {activeTab === "bookmarks" && (
+            <BookmarkBrowser
+              onProcess={handleStartProcessing}
+              processing={isProcessing}
+            />
+          )}
           {activeTab === "status" && <div className="placeholder">Status (Sprint 2.4)</div>}
         </ErrorBoundary>
       </main>
+
+      {showModal && processingState && (
+        <ProcessingModal
+          initialState={processingState}
+          onClose={handleCloseModal}
+        />
+      )}
     </div>
   );
 }
