@@ -51,28 +51,21 @@ export interface LLMProvider {
 
 export interface Config {
   apiKey: string;
-  llmProvider: "anthropic" | "openai";
+  llmProvider: "openrouter";
   vaultUrl: string;
   vaultApiKey: string;
   defaultFolder: string;
 }
 
-/** Raw file entry from Obsidian Local REST API */
-export interface VaultFileEntry {
-  path: string;
-  stat: { ctime: number; mtime: number; size: number };
-  tags?: string[];
-}
-
-/** Response from GET /vault/ and GET /vault/{dir}/ */
+/** Response from GET /vault/ and GET /vault/{dir}/ - returns plain string paths */
 export interface VaultListResponse {
-  files: VaultFileEntry[];
+  files: string[];
 }
 
 /** Response from GET / (health check) */
 export interface VaultHealthResponse {
   authenticated: boolean;
-  ok: boolean;
+  status: string;
   service: string;
   versions: Record<string, string>;
 }

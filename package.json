@@ -10,7 +10,8 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "validate": "bun run scripts/validate.ts"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.3.0",
@@ -27,7 +28,6 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.74.0",
     "@mozilla/readability": "^0.6.0",
     "linkedom": "^0.18.12",
     "react": "^19.2.4",

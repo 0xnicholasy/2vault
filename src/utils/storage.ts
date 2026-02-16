@@ -2,7 +2,7 @@ import type { Config, VaultContext, ProcessingResult } from "@/core/types.ts";
 
 interface SyncStorage {
   apiKey: string;
-  llmProvider: "anthropic" | "openai";
+  llmProvider: "openrouter";
   vaultUrl: string;
   vaultApiKey: string;
   defaultFolder: string;
@@ -54,7 +54,7 @@ export async function getConfig(): Promise<Config> {
 
   return {
     apiKey: apiKey ?? "",
-    llmProvider: llmProvider ?? "anthropic",
+    llmProvider: llmProvider ?? "openrouter",
     vaultUrl: vaultUrl ?? "https://localhost:27124",
     vaultApiKey: vaultApiKey ?? "",
     defaultFolder: defaultFolder ?? "Inbox",

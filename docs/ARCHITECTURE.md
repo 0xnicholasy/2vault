@@ -139,7 +139,7 @@ User selects bookmark folder (or current page via shortcut)
     "https://twitter.com/*",
     "https://www.linkedin.com/*",
     "http://localhost:*",         // Obsidian Local REST API
-    "https://api.anthropic.com/*" // BYOK direct calls
+    "https://openrouter.ai/*"     // BYOK direct calls via OpenRouter
   ],
   "commands": {
     "capture-current-page": {
@@ -257,30 +257,30 @@ interface NotePreview {
 
 ```typescript
 interface LLMProvider {
-  summarize(content: string, vaultContext: VaultContext): Promise<ProcessedNote>;
+  processContent(content: ExtractedContent, vaultContext: VaultContext): Promise<ProcessedNote>;
 }
 
-// Implementations:
-class AnthropicProvider implements LLMProvider { ... }  // Claude
-class OpenAIProvider implements LLMProvider { ... }     // GPT-4o / GPT-4o-mini
-// Future: Gemini, Grok, local models via Ollama
+// Current implementation:
+class OpenRouterProvider implements LLMProvider { ... }  // OpenRouter (multi-model gateway)
+// Future: additional providers can implement LLMProvider interface
 ```
 
 ### BYOK Mode (Free Tier)
 
 ```
-Extension -> Direct HTTPS -> api.anthropic.com (or api.openai.com)
+Extension -> Direct HTTPS -> openrouter.ai/api
 ```
 
-- API key stored in `chrome.storage.sync` (encrypted per Chrome profile)
+- OpenRouter API key stored in `chrome.storage.sync` (encrypted per Chrome profile)
 - All processing happens client-side
 - Zero backend infrastructure needed
 - User sees their own API usage/costs
+- One API key accesses all models (Gemini, Claude, GPT, etc.)
 
 ### Managed Mode (Paid Tier)
 
 ```
-Extension -> HTTPS -> 2vault-proxy.vercel.app -> api.anthropic.com
+Extension -> HTTPS -> 2vault-proxy.vercel.app -> openrouter.ai/api
 ```
 
 - Serverless proxy on Vercel (Edge Functions)
@@ -291,13 +291,11 @@ Extension -> HTTPS -> 2vault-proxy.vercel.app -> api.anthropic.com
 
 ### Model Selection
 
-| Use Case | Recommended Model | Cost/Article |
-|----------|------------------|-------------|
-| Summarization | Claude Haiku 4.5 | ~$0.002-0.005 |
-| Vault categorization | Claude Sonnet 4.5 | ~$0.01-0.03 |
-| Budget mode | Haiku for everything | ~$0.004-0.01 |
+| Use Case | Default Model | Cost/Article |
+|----------|--------------|-------------|
+| Summarization + Categorization | Google Gemini 2.0 Flash | ~$0.001-0.003 |
 
-Default: Haiku for summarization, Sonnet for categorization (best cost/quality balance).
+Default: Single Gemini 2.0 Flash model for both stages via OpenRouter. Users can switch models via OpenRouter dashboard without code changes.
 
 ## Error Handling
 

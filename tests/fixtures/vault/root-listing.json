@@ -1,70 +1,18 @@
 {
   "files": [
-    {
-      "path": "Resources/AI/GPT-4 Architecture.md",
-      "stat": { "ctime": 1700000000000, "mtime": 1705000000000, "size": 4200 },
-      "tags": ["ai", "llm", "architecture"]
-    },
-    {
-      "path": "Resources/AI/Prompt Engineering Guide.md",
-      "stat": { "ctime": 1700100000000, "mtime": 1704900000000, "size": 3100 },
-      "tags": ["ai", "prompts"]
-    },
-    {
-      "path": "Resources/Programming/TypeScript Patterns.md",
-      "stat": { "ctime": 1700200000000, "mtime": 1704800000000, "size": 5600 },
-      "tags": ["typescript", "programming", "patterns"]
-    },
-    {
-      "path": "Resources/Programming/Rust Ownership.md",
-      "stat": { "ctime": 1700300000000, "mtime": 1704700000000, "size": 2800 },
-      "tags": ["rust", "programming"]
-    },
-    {
-      "path": "Projects/2Vault/Architecture.md",
-      "stat": { "ctime": 1700400000000, "mtime": 1704600000000, "size": 6200 },
-      "tags": ["project", "2vault", "architecture"]
-    },
-    {
-      "path": "Projects/2Vault/Sprint Notes.md",
-      "stat": { "ctime": 1700500000000, "mtime": 1704500000000, "size": 1800 },
-      "tags": ["project", "2vault"]
-    },
-    {
-      "path": "Daily/2025-01-15.md",
-      "stat": { "ctime": 1705276800000, "mtime": 1705276800000, "size": 900 },
-      "tags": ["daily"]
-    },
-    {
-      "path": "Inbox/Unsorted Article.md",
-      "stat": { "ctime": 1705000000000, "mtime": 1705000000000, "size": 1200 },
-      "tags": []
-    },
-    {
-      "path": "Reading/Books/Designing Data-Intensive Applications.md",
-      "stat": { "ctime": 1700600000000, "mtime": 1704400000000, "size": 8500 },
-      "tags": ["books", "distributed-systems", "architecture"]
-    },
-    {
-      "path": "Reading/Articles/Web3 Explained.md",
-      "stat": { "ctime": 1700700000000, "mtime": 1704300000000, "size": 3400 },
-      "tags": ["web3", "blockchain"]
-    },
-    {
-      "path": ".obsidian/plugins/config.json",
-      "stat": { "ctime": 1699000000000, "mtime": 1699000000000, "size": 500 }
-    },
-    {
-      "path": ".trash/deleted-note.md",
-      "stat": { "ctime": 1699100000000, "mtime": 1699100000000, "size": 200 }
-    },
-    {
-      "path": "root-note.md",
-      "stat": { "ctime": 1705100000000, "mtime": 1705100000000, "size": 600 }
-    },
-    {
-      "path": "Resources/AI/image.png",
-      "stat": { "ctime": 1700000000000, "mtime": 1700000000000, "size": 150000 }
-    }
+    "Resources/AI/GPT-4 Architecture.md",
+    "Resources/AI/Prompt Engineering Guide.md",
+    "Resources/Programming/TypeScript Patterns.md",
+    "Resources/Programming/Rust Ownership.md",
+    "Projects/2Vault/Architecture.md",
+    "Projects/2Vault/Sprint Notes.md",
+    "Daily/2025-01-15.md",
+    "Inbox/Unsorted Article.md",
+    "Reading/Books/Designing Data-Intensive Applications.md",
+    "Reading/Articles/Web3 Explained.md",
+    ".obsidian/plugins/config.json",
+    ".trash/deleted-note.md",
+    "root-note.md",
+    "Resources/AI/image.png"
   ]
 }

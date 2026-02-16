@@ -1,6 +1,5 @@
 import type {
   NotePreview,
-  VaultFileEntry,
   VaultHealthResponse,
   VaultListResponse,
 } from "@/core/types";
@@ -24,7 +23,8 @@ export class VaultClient {
   private async request<T>(
     method: string,
     path: string,
-    body?: string
+    body?: string,
+    contentType?: string
   ): Promise<T> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -35,7 +35,7 @@ export class VaultClient {
     };
 
     if (body !== undefined) {
-      headers["Content-Type"] = "text/markdown";
+      headers["Content-Type"] = contentType ?? "text/markdown";
     }
 
     let response: Response;
@@ -79,7 +79,7 @@ export class VaultClient {
   async testConnection(): Promise<boolean> {
     try {
       const health = await this.request<VaultHealthResponse>("GET", "/");
-      return health.ok === true && health.authenticated === true;
+      return health.status === "OK" && health.authenticated === true;
     } catch {
       return false;
     }
@@ -93,10 +93,11 @@ export class VaultClient {
 
     const folderSet = new Set<string>();
 
-    for (const file of rootListing.files) {
-      const lastSlash = file.path.lastIndexOf("/");
+    // Extract folder paths from file paths (strings)
+    for (const filePath of rootListing.files) {
+      const lastSlash = filePath.lastIndexOf("/");
       if (lastSlash > 0) {
-        const folder = file.path.substring(0, lastSlash);
+        const folder = filePath.substring(0, lastSlash);
         folderSet.add(folder);
       }
     }
@@ -116,10 +117,10 @@ export class VaultClient {
           "GET",
           `/vault/${encodeURIComponent(topFolder)}/`
         );
-        for (const file of listing.files) {
-          const lastSlash = file.path.lastIndexOf("/");
+        for (const filePath of listing.files) {
+          const lastSlash = filePath.lastIndexOf("/");
           if (lastSlash > 0) {
-            folderSet.add(file.path.substring(0, lastSlash));
+            folderSet.add(filePath.substring(0, lastSlash));
           }
         }
       } catch {
@@ -141,27 +142,11 @@ export class VaultClient {
   }
 
   async listTags(): Promise<string[]> {
-    const rootListing = await this.request<VaultListResponse>(
-      "GET",
-      "/vault/"
-    );
-
-    const tagCounts = new Map<string, number>();
-
-    for (const file of rootListing.files) {
-      if (file.tags) {
-        for (const tag of file.tags) {
-          tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
-        }
-      }
-    }
-
-    // Sort by frequency (descending), then alphabetically for ties
-    const sorted = [...tagCounts.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([tag]) => tag);
-
-    return sorted.slice(0, MAX_TAGS);
+    // The Local REST API doesn't have a dedicated tags endpoint.
+    // Extract tags from file frontmatter by reading vault files.
+    // For now, return empty array - tags will be discovered as notes are processed.
+    // A future enhancement could parse YAML frontmatter from sampled notes.
+    return [];
   }
 
   async sampleNotes(folder: string, limit: number): Promise<NotePreview[]> {
@@ -171,13 +156,13 @@ export class VaultClient {
     );
 
     const mdFiles = listing.files
-      .filter((f) => f.path.endsWith(".md"))
-      .sort((a, b) => b.stat.mtime - a.stat.mtime);
+      .filter((f) => f.endsWith(".md"))
+      .slice(0, limit);
 
-    return mdFiles.slice(0, limit).map((file) => ({
+    return mdFiles.map((filePath) => ({
       folder,
-      title: extractTitle(file.path),
-      tags: file.tags ?? [],
+      title: extractTitle(filePath),
+      tags: [],
     }));
   }
 

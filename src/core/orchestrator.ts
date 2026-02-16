@@ -1,6 +1,6 @@
-import type { Config, ProcessingResult } from "@/core/types.ts";
+import type { Config, LLMProvider, ProcessingResult } from "@/core/types.ts";
 import { VaultClient } from "@/core/vault-client";
-import { AnthropicProvider } from "@/core/anthropic-provider";
+import { OpenRouterProvider } from "@/core/openrouter-provider";
 import { buildVaultContext } from "@/core/vault-analyzer";
 import { fetchAndExtract } from "@/core/extractor";
 import { formatNote, generateFilename } from "@/core/note-formatter";
@@ -12,13 +12,17 @@ export type ProgressCallback = (
   total: number
 ) => void;
 
+export function createDefaultProvider(config: Config): LLMProvider {
+  return new OpenRouterProvider(config.apiKey);
+}
+
 export async function processUrls(
   urls: string[],
   config: Config,
+  provider: LLMProvider,
   onProgress?: ProgressCallback
 ): Promise<ProcessingResult[]> {
   const client = new VaultClient(config.vaultUrl, config.vaultApiKey);
-  const provider = new AnthropicProvider(config.apiKey);
 
   // Build vault context once - failure here aborts entire batch
   const vaultContext = await buildVaultContext(client);

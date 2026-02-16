@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type {
   Config,
   ExtractedContent,
+  LLMProvider,
   ProcessedNote,
   VaultContext,
 } from "@/core/types";
@@ -11,14 +12,12 @@ const {
   mockFetchAndExtract,
   mockBuildVaultContext,
   mockCreateNote,
-  mockProcessContent,
   mockFormatNote,
   mockGenerateFilename,
 } = vi.hoisted(() => ({
   mockFetchAndExtract: vi.fn(),
   mockBuildVaultContext: vi.fn(),
   mockCreateNote: vi.fn(),
-  mockProcessContent: vi.fn(),
   mockFormatNote: vi.fn(),
   mockGenerateFilename: vi.fn(),
 }));
@@ -37,12 +36,6 @@ vi.mock("@/core/vault-client", () => ({
   },
 }));
 
-vi.mock("@/core/anthropic-provider", () => ({
-  AnthropicProvider: class {
-    processContent = mockProcessContent;
-  },
-}));
-
 vi.mock("@/core/note-formatter", () => ({
   formatNote: mockFormatNote,
   generateFilename: mockGenerateFilename,
@@ -52,7 +45,7 @@ import { processUrls, type ProgressCallback } from "@/core/orchestrator";
 
 const TEST_CONFIG: Config = {
   apiKey: "test-api-key",
-  llmProvider: "anthropic",
+  llmProvider: "openrouter",
   vaultUrl: "https://localhost:27124",
   vaultApiKey: "test-vault-key",
   defaultFolder: "Inbox",
@@ -95,6 +88,12 @@ function createProcessed(overrides?: Partial<ProcessedNote>): ProcessedNote {
   };
 }
 
+const mockProcessContent = vi.fn<LLMProvider["processContent"]>();
+
+function createMockProvider(): LLMProvider {
+  return { processContent: mockProcessContent };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 
@@ -122,7 +121,7 @@ describe("processUrls - happy path", () => {
       .mockResolvedValueOnce(processed1)
       .mockResolvedValueOnce(processed2);
 
-    const results = await processUrls(urls, TEST_CONFIG);
+    const results = await processUrls(urls, TEST_CONFIG, createMockProvider());
 
     expect(results).toHaveLength(2);
     expect(results[0]!.status).toBe("success");
@@ -132,7 +131,7 @@ describe("processUrls - happy path", () => {
   });
 
   it("returns folder in success result", async () => {
-    const results = await processUrls(["https://example.com/a"], TEST_CONFIG);
+    const results = await processUrls(["https://example.com/a"], TEST_CONFIG, createMockProvider());
 
     expect(results[0]!.folder).toBe("Reading/Articles");
   });
@@ -163,7 +162,7 @@ describe("processUrls - pipeline order", () => {
       callOrder.push("create");
     });
 
-    await processUrls(["https://example.com/a"], TEST_CONFIG);
+    await processUrls(["https://example.com/a"], TEST_CONFIG, createMockProvider());
 
     expect(callOrder).toEqual(["extract", "process", "format", "create"]);
   });
@@ -178,7 +177,7 @@ describe("processUrls - progress callbacks", () => {
       statuses.push(status);
     };
 
-    await processUrls(["https://example.com/a"], TEST_CONFIG, onProgress);
+    await processUrls(["https://example.com/a"], TEST_CONFIG, createMockProvider(), onProgress);
 
     expect(statuses).toEqual(["extracting", "processing", "creating", "done"]);
   });
@@ -195,7 +194,7 @@ describe("processUrls - progress callbacks", () => {
       calls.push({ index, total });
     };
 
-    await processUrls(urls, TEST_CONFIG, onProgress);
+    await processUrls(urls, TEST_CONFIG, createMockProvider(), onProgress);
 
     // First URL: index 0, total 2 (4 callbacks)
     expect(calls[0]).toEqual({ index: 0, total: 2 });
@@ -227,7 +226,7 @@ describe("processUrls - extraction failure", () => {
       )
       .mockResolvedValueOnce(createExtracted({ url: urls[1] }));
 
-    const results = await processUrls(urls, TEST_CONFIG);
+    const results = await processUrls(urls, TEST_CONFIG, createMockProvider());
 
     expect(results).toHaveLength(2);
     expect(results[0]!.status).toBe("failed");
@@ -250,7 +249,7 @@ describe("processUrls - LLM failure", () => {
       .mockRejectedValueOnce(new Error("Summarization API call failed"))
       .mockResolvedValueOnce(createProcessed());
 
-    const results = await processUrls(urls, TEST_CONFIG);
+    const results = await processUrls(urls, TEST_CONFIG, createMockProvider());
 
     expect(results).toHaveLength(2);
     expect(results[0]!.status).toBe("failed");
@@ -273,7 +272,7 @@ describe("processUrls - vault creation failure", () => {
       .mockRejectedValueOnce(new Error("HTTP 500: PUT /vault/note.md"))
       .mockResolvedValueOnce(undefined);
 
-    const results = await processUrls(urls, TEST_CONFIG);
+    const results = await processUrls(urls, TEST_CONFIG, createMockProvider());
 
     expect(results).toHaveLength(2);
     expect(results[0]!.status).toBe("failed");
@@ -289,7 +288,7 @@ describe("processUrls - vault context failure", () => {
     mockBuildVaultContext.mockRejectedValue(new Error("Connection refused"));
 
     await expect(
-      processUrls(["https://example.com/a"], TEST_CONFIG)
+      processUrls(["https://example.com/a"], TEST_CONFIG, createMockProvider())
     ).rejects.toThrow("Connection refused");
   });
 });
@@ -298,7 +297,7 @@ describe("processUrls - vault context failure", () => {
 
 describe("processUrls - empty URL list", () => {
   it("returns empty results for empty URL list", async () => {
-    const results = await processUrls([], TEST_CONFIG);
+    const results = await processUrls([], TEST_CONFIG, createMockProvider());
 
     expect(results).toEqual([]);
   });
@@ -310,7 +309,8 @@ describe("processUrls - no progress callback", () => {
   it("works without onProgress callback", async () => {
     const results = await processUrls(
       ["https://example.com/a"],
-      TEST_CONFIG
+      TEST_CONFIG,
+      createMockProvider()
     );
 
     expect(results).toHaveLength(1);
@@ -324,7 +324,7 @@ describe("processUrls - note path", () => {
   it("creates note at suggestedFolder/filename", async () => {
     mockGenerateFilename.mockReturnValue("my-article.md");
 
-    await processUrls(["https://example.com/a"], TEST_CONFIG);
+    await processUrls(["https://example.com/a"], TEST_CONFIG, createMockProvider());
 
     expect(mockCreateNote).toHaveBeenCalledWith(
       "Reading/Articles/my-article.md",

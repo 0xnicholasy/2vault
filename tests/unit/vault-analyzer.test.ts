@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { buildVaultContext } from "@/core/vault-analyzer";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { buildVaultContext, clearVaultContextCache } from "@/core/vault-analyzer";
 import type { VaultClient } from "@/core/vault-client";
 import type { NotePreview } from "@/core/types";
 import { VaultClientError } from "@/core/types";
@@ -41,6 +41,10 @@ function createMockClient(overrides?: Partial<VaultClient>): VaultClient {
     ...overrides,
   } as VaultClient;
 }
+
+beforeEach(() => {
+  clearVaultContextCache();
+});
 
 // -- buildVaultContext ---------------------------------------------------------
 
@@ -184,5 +188,85 @@ describe("buildVaultContext", () => {
     await expect(buildVaultContext(client)).rejects.toThrow(
       VaultClientError
     );
+  });
+});
+
+// -- Caching ------------------------------------------------------------------
+
+describe("buildVaultContext - caching", () => {
+  it("returns cached context on second call within TTL", async () => {
+    const client = createMockClient();
+
+    const ctx1 = await buildVaultContext(client);
+    const ctx2 = await buildVaultContext(client);
+
+    expect(ctx1).toBe(ctx2);
+    // listFolders should only be called once (second call uses cache)
+    expect(client.listFolders).toHaveBeenCalledTimes(1);
+    expect(client.listTags).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetches fresh after TTL expires", async () => {
+    const client = createMockClient();
+
+    // Spy on Date.now to control time
+    const realDateNow = Date.now;
+    let fakeNow = realDateNow.call(Date);
+    vi.spyOn(Date, "now").mockImplementation(() => fakeNow);
+
+    await buildVaultContext(client);
+    expect(client.listFolders).toHaveBeenCalledTimes(1);
+
+    // Advance time past the TTL (1 hour + 1ms)
+    fakeNow += 60 * 60 * 1000 + 1;
+
+    await buildVaultContext(client);
+    expect(client.listFolders).toHaveBeenCalledTimes(2);
+
+    vi.restoreAllMocks();
+  });
+
+  it("clearVaultContextCache forces refresh", async () => {
+    const client = createMockClient();
+
+    await buildVaultContext(client);
+    expect(client.listFolders).toHaveBeenCalledTimes(1);
+
+    clearVaultContextCache();
+
+    await buildVaultContext(client);
+    expect(client.listFolders).toHaveBeenCalledTimes(2);
+  });
+});
+
+// -- Promise.allSettled -------------------------------------------------------
+
+describe("buildVaultContext - resilient folder sampling", () => {
+  it("succeeds even if some folder sampling fails", async () => {
+    let callCount = 0;
+    const client = createMockClient({
+      listFolders: vi
+        .fn<() => Promise<string[]>>()
+        .mockResolvedValue(["Good1", "Bad", "Good2"]),
+      sampleNotes: vi
+        .fn<(folder: string, limit: number) => Promise<NotePreview[]>>()
+        .mockImplementation((folder: string) => {
+          callCount++;
+          if (folder === "Bad") {
+            return Promise.reject(new Error("Folder read failed"));
+          }
+          return Promise.resolve([
+            { folder, title: "Note", tags: [] },
+          ]);
+        }),
+    } as Partial<VaultClient>);
+
+    const ctx = await buildVaultContext(client);
+
+    expect(callCount).toBe(3);
+    // Only notes from Good1 and Good2 (Bad was rejected)
+    expect(ctx.recentNotes).toHaveLength(2);
+    expect(ctx.recentNotes[0]!.folder).toBe("Good1");
+    expect(ctx.recentNotes[1]!.folder).toBe("Good2");
   });
 });

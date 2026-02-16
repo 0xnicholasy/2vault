@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **2Vault** is a Chrome browser extension (Manifest V3) that reads, digests, and categorizes web bookmarks into an Obsidian vault using AI. It solves the universal problem of bookmarking content but never reading it.
 
-**Stack:** TypeScript, React, Vite, Chrome Extension APIs, Anthropic SDK, Readability + Turndown, Obsidian Local REST API
+**Stack:** TypeScript, React, Vite, Chrome Extension APIs, OpenRouter API, Readability + Turndown, Obsidian Local REST API
 **License:** AGPL-3.0
 
 ## Development Commands
@@ -22,6 +22,9 @@ bun run build        # Production build -> dist/ (load as unpacked extension)
 # Testing
 bun test             # Run Vitest tests
 bun test:watch       # Watch mode
+
+# Validation (requires .env with API keys + Obsidian running)
+bun run validate     # Process URLs from scripts/urls.txt through full pipeline
 ```
 
 **Verification workflow:** Use `bun run typecheck` after changes. Load `dist/` as unpacked extension in `chrome://extensions` for manual testing.
@@ -40,7 +43,8 @@ src/core/
 ├── extractor.ts       # HTML -> clean markdown (Readability + Turndown)
 ├── vault-client.ts    # Obsidian Local REST API HTTP client
 ├── vault-analyzer.ts  # Reads vault structure, builds LLM context
-├── processor.ts       # LLM summarization + vault-aware categorization
+├── llm-shared.ts      # Shared LLM prompt building and validation logic
+├── openrouter-provider.ts  # OpenRouter LLM provider (default)
 ├── note-formatter.ts  # ProcessedNote -> markdown string + YAML frontmatter
 └── orchestrator.ts    # Main pipeline: URLs -> extract -> analyze -> process -> create
 ```
@@ -63,7 +67,7 @@ src/utils/             # chrome.storage wrapper, config management
 | Vault communication | Obsidian Local REST API plugin | Mature (~200K+ downloads), clean HTTP API, stable |
 | Content extraction (articles) | Readability + Turndown | Runs in-extension, no external API dependency, free |
 | Content extraction (social media) | DOM content scripts | Free, no API costs ($100/mo for X API), captures rendered content |
-| LLM provider | Abstracted interface | BYOK client-side (free tier) + serverless proxy (managed tier) |
+| LLM provider | OpenRouter (abstracted interface) | Single API key for all models, BYOK client-side |
 | Batch bookmark processing | `chrome.bookmarks` API | Native, fast, user selects folders |
 | Extension bundler | Vite + CRXJS | HMR for extension dev, React support |
 
@@ -151,10 +155,10 @@ interface LLMProvider {
 
 ### BYOK Mode (Free Tier)
 
-Extension calls LLM API directly from browser. API key in `chrome.storage.sync`.
+Extension calls OpenRouter API directly from browser. API key in `chrome.storage.sync`.
 
 ```
-Extension -> HTTPS -> api.anthropic.com
+Extension -> HTTPS -> openrouter.ai/api
 ```
 
 ### Managed Mode (Paid Tier - Future)
@@ -162,14 +166,15 @@ Extension -> HTTPS -> api.anthropic.com
 Extension calls serverless proxy. Proxy holds API key.
 
 ```
-Extension -> HTTPS -> 2vault-proxy.vercel.app -> api.anthropic.com
+Extension -> HTTPS -> 2vault-proxy.vercel.app -> openrouter.ai/api
 ```
 
 ### Model Strategy
 
-- **Summarization:** Claude Haiku 4.5 (cheap, sufficient quality)
-- **Categorization:** Claude Sonnet 4.5 (higher accuracy for folder/tag matching)
-- Use `tool_use` for structured JSON output from both
+- **Default model:** Google Gemini 2.0 Flash via OpenRouter (cheap, fast, sufficient quality)
+- Single model handles both summarization and categorization
+- Use function calling (OpenAI-compatible tool format) for structured JSON output
+- OpenRouter enables easy model switching without code changes
 
 ## Code Style Guidelines
 
@@ -197,7 +202,7 @@ Extension -> HTTPS -> 2vault-proxy.vercel.app -> api.anthropic.com
 // chrome.storage.sync (synced across devices, 100KB limit)
 {
   apiKey: string;              // Encrypted LLM API key
-  llmProvider: 'anthropic' | 'openai';
+  llmProvider: 'openrouter';
   vaultUrl: string;            // Default: https://localhost:27124
   vaultApiKey: string;         // Obsidian REST API key
   defaultFolder: string;       // Fallback folder for uncategorized notes
@@ -253,18 +258,25 @@ tests/fixtures/
 Detailed specs are in `docs/` (single source of truth - no other spec directories):
 - `docs/PRODUCT.md` - user stories, MVP scope, pricing, competitive landscape, strategic decisions
 - `docs/ARCHITECTURE.md` - system design, data flow, extension structure, error handling
-- `docs/IMPLEMENTATION.md` - sprint breakdown with coding-level TODOs (follow this for build order)
+- `docs/IMPLEMENTATION.md` - sprint breakdown with progress tracking (follow this for build order)
 - `docs/BRANDING.md` - naming, build-in-public plan, launch strategy
 
 Each doc file has a `<!-- Claude Code Tooling -->` comment at the top listing which agents and skills to use for work described in that file.
 
-**Start with `docs/IMPLEMENTATION.md`** - it has the sprint order, checkboxes, and per-sprint agent/skill mapping.
+**Start with `docs/IMPLEMENTATION.md`** - it has the sprint order, progress legend, checkboxes, and per-sprint agent/skill mapping. Progress is visible at a glance using the legend: `[x]` (done), `[>]` (in-progress), `[ ]` (todo), `[~]` (deferred).
 
 ## Current Progress
 
-- **Phase 1 (Core Module):** Sprints 1.1-1.3 COMPLETE. Sprint 1.4 (Validation) remaining.
-- **Phase 2 (Extension):** Not started. Sprints 2.1-2.4 pending.
-- **Phase 3 (Managed Tier):** Future. Only after Phase 2 live with 100+ installs.
+Progress is tracked in `docs/IMPLEMENTATION.md` using this legend:
+- `[x]` = DONE (committed code exists)
+- `[>]` = IN-PROGRESS (actively being worked on)
+- `[ ]` = TODO (not started yet)
+- `[~]` = DEFERRED (intentionally skipped or deferred)
+
+**Status:**
+- **Phase 1 (Core Module):** Sprints 1.1-1.4 [x] DONE. API frozen.
+- **Phase 2 (Extension):** Sprints 2.1-2.4 [ ] TODO (next).
+- **Phase 3 (Managed Tier):** [~] DEFERRED (only after Phase 2 live with 100+ installs).
 
 ## Phase Boundaries
 

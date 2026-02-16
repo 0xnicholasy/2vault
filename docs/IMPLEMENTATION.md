@@ -1,5 +1,16 @@
 # Implementation Plan
 
+## Progress Tracking Legend
+
+| Symbol | State | Meaning |
+|--------|-------|---------|
+| `[x]` | DONE | Completed and committed to main branch |
+| `[>]` | IN-PROGRESS | Actively being worked on |
+| `[ ]` | TODO | Not started yet |
+| `[~]` | DEFERRED | Intentionally skipped or deferred |
+
+---
+
 <!-- Claude Code Tooling (per sprint):
 
   Phase 1 (Core Module) - COMPLETED: Sprints 1.1-1.3
@@ -49,7 +60,7 @@ Coding-level TODOs organized into phases and sprints.
 
 Build and validate the AI pipeline independently before wrapping it in an extension. Test via Claude Code skill with article URLs.
 
-### Sprint 1.1: Content Extraction Module (Day 1-2)
+### Sprint 1.1: Content Extraction Module (Day 1-2) [DONE]
 
 **Goal:** Reliably extract clean markdown from web URLs.
 
@@ -57,12 +68,12 @@ Build and validate the AI pipeline independently before wrapping it in an extens
 
 **Location:** Standalone module (will be imported into extension later)
 
-- [ ] Set up TypeScript project with Vite (library mode)
-- [ ] Install dependencies:
+- [x] Set up TypeScript project with Vite (library mode)
+- [x] Install dependencies:
   - `@mozilla/readability` - content extraction from HTML
   - `turndown` - HTML to markdown conversion
   - `linkedom` - lightweight DOM implementation for Node.js
-- [ ] Implement `extractArticle(html: string): ExtractedContent`
+- [x] Implement `extractArticle(html: string): ExtractedContent`
   - Readability parses HTML -> extracts main content
   - Turndown converts to clean markdown
   - Extract metadata: title, author, datePublished
@@ -70,106 +81,106 @@ Build and validate the AI pipeline independently before wrapping it in an extens
 
 #### 1.1.2 URL fetcher
 
-- [ ] Implement `fetchAndExtract(url: string): Promise<ExtractedContent>`
+- [x] Implement `fetchAndExtract(url: string): Promise<ExtractedContent>`
   - Fetch HTML with appropriate User-Agent header
   - Pass to `extractArticle()`
   - Handle errors: timeout (10s), 404, redirects, empty content
   - Return `{ status: 'failed', error: '...' }` on failure
-- [ ] Content length guard: truncate markdown to ~8000 tokens if too long
+- [x] Content length guard: truncate markdown to ~8000 tokens if too long
 
 #### 1.1.3 Test with diverse URLs
 
-- [ ] Test 10+ URLs across content types:
+- [x] Test 10+ URLs across content types:
   - Standard blog post (dev.to, Medium)
   - Technical documentation (MDN, React docs)
   - News article (TechCrunch, The Verge)
   - GitHub README
   - Short social media-style post
-- [ ] Document success rate and failure modes
-- [ ] Target: >85% of article URLs extract cleanly
+- [x] Document success rate and failure modes
+- [x] Target: >85% of article URLs extract cleanly
 
-### Sprint 1.2: Vault Analysis + Categorization (Day 2-3)
+### Sprint 1.2: Vault Analysis + Categorization (Day 2-3) [DONE]
 
 **Goal:** Read Obsidian vault structure and categorize content intelligently.
 
 #### 1.2.1 Vault client
 
-- [ ] Implement `VaultClient` class wrapping Obsidian Local REST API:
+- [x] Implement `VaultClient` class wrapping Obsidian Local REST API:
   - `listFolders(): Promise<string[]>` - top 2 levels
   - `listTags(): Promise<string[]>` - existing tag taxonomy
   - `sampleNotes(folder: string, limit: number): Promise<NotePreview[]>`
   - `createNote(path: string, content: string): Promise<void>`
-- [ ] Connection test: verify Obsidian + Local REST API plugin is running
-- [ ] Handle auth: API key from config
+- [x] Connection test: verify Obsidian + Local REST API plugin is running
+- [x] Handle auth: API key from config
 
 #### 1.2.2 Vault context builder
 
-- [ ] Implement `buildVaultContext(client: VaultClient): Promise<VaultContext>`
+- [x] Implement `buildVaultContext(client: VaultClient): Promise<VaultContext>`
   - List folders (max 50, top 2 levels, exclude `.obsidian`, `.trash`)
   - Collect existing tags (max 100 most-used)
   - Sample 5-10 notes per folder for purpose inference
   - Build concise context string (<2000 tokens)
-- [ ] Test on personal Obsidian vault
-- [ ] Verify context accurately represents vault structure
+- [x] Test on personal Obsidian vault
+- [x] Verify context accurately represents vault structure
 
 #### 1.2.3 LLM processor
 
-- [ ] Implement `LLMProvider` interface:
+- [x] Implement `LLMProvider` interface:
   ```typescript
   interface LLMProvider {
     processContent(content: ExtractedContent, vaultContext: VaultContext): Promise<ProcessedNote>;
   }
   ```
-- [ ] Implement `AnthropicProvider` using `@anthropic-ai/sdk`:
+- [x] Implement `OpenRouterProvider` via OpenRouter API (OpenAI-compatible):
   - Summarization prompt: title, summary (2-3 sentences), key takeaways (3-5 bullets)
   - Categorization prompt: given vault folders + tags, pick best-fit
-  - Use tool_use for structured JSON output
-  - Model: Haiku for summary, Sonnet for categorization
-- [ ] Validate categorization accuracy on 10+ articles against personal vault
-- [ ] Target: >80% correct folder assignment on first try
+  - Use function calling for structured JSON output
+  - Model: Google Gemini 2.0 Flash (single model for both stages)
+- [x] Validate categorization accuracy on 10+ articles against personal vault
+- [x] Target: >80% correct folder assignment on first try
 
-### Sprint 1.3: Note Creation + End-to-End Test (Day 3-4)
+### Sprint 1.3: Note Creation + End-to-End Test (Day 3-4) [DONE]
 
 **Goal:** Full pipeline from URL to Obsidian note.
 
 #### 1.3.1 Note formatter
 
-- [ ] Implement `formatNote(processed: ProcessedNote): string`
+- [x] Implement `formatNote(processed: ProcessedNote): string`
   - YAML frontmatter: source, author, date_published, date_saved, tags, type, status
   - Markdown body: title, summary, key takeaways, source link
   - Sanitize special characters in YAML values
   - Generate filename: kebab-case from title, max 60 chars
-- [ ] Separate templates for articles vs social media posts
+- [x] Separate templates for articles vs social media posts
 
 #### 1.3.2 Orchestrator
 
-- [ ] Implement `processUrls(urls: string[], config: Config): Promise<ProcessingResult[]>`
+- [x] Implement `processUrls(urls: string[], config: Config): Promise<ProcessingResult[]>`
   - Step 1: Fetch all URLs (sequential, with rate limiting)
   - Step 2: Build vault context (once, cached)
   - Step 3: Process each via LLM
   - Step 4: Create notes in vault
   - Step 5: Return results summary
-- [ ] Progress callbacks for status reporting
-- [ ] Handle partial failures (continue batch on individual URL failure)
+- [x] Progress callbacks for status reporting
+- [x] Handle partial failures (continue batch on individual URL failure)
 
 #### 1.3.3 Claude Code skill for testing
 
-- [ ] Create skill prompt that uses the processing module
-- [ ] Test full pipeline: 20+ personal bookmarks
-- [ ] Review created notes in Obsidian
-- [ ] Iterate on prompts based on real results
-- [ ] Document what works and what needs fixing
+- [x] Create skill prompt that uses the processing module
+- [x] Test full pipeline: 20+ personal bookmarks
+- [x] Review created notes in Obsidian
+- [x] Iterate on prompts based on real results
+- [x] Document what works and what needs fixing
 
-### Sprint 1.4: Validation + Iteration (Day 4-5)
+### Sprint 1.4: Validation + Iteration (Day 4-5) [DONE]
 
-- [ ] Process personal bookmark backlog (30-50 URLs)
-- [ ] Review all created notes in Obsidian
-- [ ] Measure metrics:
+- [x] Process personal bookmark backlog (30-50 URLs)
+- [x] Review all created notes in Obsidian
+- [x] Measure metrics:
   - Extraction success rate (target: >85%)
   - Categorization accuracy (target: >80%)
   - Summary usefulness (subjective: "would I read this instead of the original?")
-- [ ] Fix issues found during validation
-- [ ] Freeze core module API (this becomes the extension's backend)
+- [x] Fix issues found during validation
+- [x] Freeze core module API (this becomes the extension's backend)
 
 ---
 
@@ -177,7 +188,7 @@ Build and validate the AI pipeline independently before wrapping it in an extens
 
 Wrap the validated core module in a Chrome Manifest V3 extension.
 
-### Sprint 2.1: Extension Scaffold (Day 1-2)
+### Sprint 2.1: Extension Scaffold (Day 1-2) [TODO]
 
 #### 2.1.1 Project setup
 
@@ -190,7 +201,7 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
   - CRXJS or similar Vite plugin for extension dev
 - [ ] Configure manifest.json:
   - Permissions: `bookmarks`, `activeTab`, `storage`, `scripting`
-  - Host permissions: `x.com`, `twitter.com`, `linkedin.com`, `localhost:*`, `api.anthropic.com`
+  - Host permissions: `x.com`, `twitter.com`, `linkedin.com`, `localhost:*`, `openrouter.ai`
   - Commands: keyboard shortcut `Ctrl+Shift+V` for capture
   - Service worker: `background/service-worker.ts`
 - [ ] Import core processing module from Phase 1
@@ -208,7 +219,7 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 - [ ] Store settings in `chrome.storage.sync`
 - [ ] Onboarding flow for first-time setup (3 steps: API key -> Vault connection -> Done)
 
-### Sprint 2.2: Bookmark Browser + Batch Processing (Day 2-4)
+### Sprint 2.2: Bookmark Browser + Batch Processing (Day 2-4) [TODO]
 
 #### 2.2.1 Bookmark folder UI
 
@@ -238,7 +249,7 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 - [ ] Process immediately (single URL, no batch UI needed)
 - [ ] Show browser notification on completion: "Saved to [folder] in Obsidian"
 
-### Sprint 2.3: Social Media Content Scripts (Day 4-6)
+### Sprint 2.3: Social Media Content Scripts (Day 4-6) [TODO]
 
 #### 2.3.1 X/Twitter extractor
 
@@ -284,7 +295,7 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 - [ ] Timeout: 15s per URL (close tab on timeout)
 - [ ] User notification: "2Vault is processing your bookmarks (opening tabs briefly)"
 
-### Sprint 2.4: Polish + Extension Store Prep (Day 6-8)
+### Sprint 2.4: Polish + Extension Store Prep (Day 6-8) [TODO]
 
 #### 2.4.1 Processing status UI
 
@@ -320,46 +331,46 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 
 ---
 
-## Phase 3: Managed Tier + Growth (Future)
+## Phase 3: Managed Tier + Growth (Future) [DEFERRED]
 
 Only after Phase 2 is live and has 100+ installs.
 
-### 3.1 Serverless Proxy
+### 3.1 Serverless Proxy [DEFERRED]
 
-- [ ] Vercel Edge Function: `POST /api/process`
+- [~] Vercel Edge Function: `POST /api/process`
   - Accepts: content + vault context
   - Returns: processed note data
   - Auth: session token from Stripe subscription
   - Rate limiting: per-user, per-day
-- [ ] Stripe integration:
+- [~] Stripe integration:
   - Checkout session for managed tier ($12-15/mo)
   - Customer portal for billing management
   - Webhook for subscription status
-- [ ] Usage tracking dashboard (for cost monitoring)
+- [~] Usage tracking dashboard (for cost monitoring)
 
-### 3.2 Additional LLM Providers
+### 3.2 Additional LLM Providers [DEFERRED]
 
-- [ ] OpenAI provider (GPT-4o / GPT-4o-mini)
-- [ ] OpenRouter integration (multi-model BYOK)
-- [ ] Provider comparison in settings (cost/quality tradeoffs)
+- [~] OpenAI provider (GPT-4o / GPT-4o-mini)
+- [~] OpenRouter integration (multi-model BYOK)
+- [~] Provider comparison in settings (cost/quality tradeoffs)
 
-### 3.3 Duplicate Detection
+### 3.3 Duplicate Detection [DEFERRED]
 
-- [ ] Check vault for existing note with same source URL before creating
-- [ ] Show "Already saved" indicator in bookmark browser
-- [ ] Option to re-process (overwrite or create new version)
+- [~] Check vault for existing note with same source URL before creating
+- [~] Show "Already saved" indicator in bookmark browser
+- [~] Option to re-process (overwrite or create new version)
 
-### 3.4 Facebook + Instagram Extractors
+### 3.4 Facebook + Instagram Extractors [DEFERRED]
 
-- [ ] Facebook DOM content script
-- [ ] Instagram DOM content script
-- [ ] Both: text-based first, media metadata later
+- [~] Facebook DOM content script
+- [~] Instagram DOM content script
+- [~] Both: text-based first, media metadata later
 
-### 3.5 YouTube Transcript Extraction
+### 3.5 YouTube Transcript Extraction [DEFERRED]
 
-- [ ] YouTube content script: extract video transcript
-- [ ] Or: use YouTube Transcript API
-- [ ] Summarize transcript instead of page content
+- [~] YouTube content script: extract video transcript
+- [~] Or: use YouTube Transcript API
+- [~] Summarize transcript instead of page content
 
 ---
 
