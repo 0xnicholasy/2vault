@@ -1,5 +1,14 @@
 # Architecture
 
+<!-- Claude Code Tooling:
+  - browser-extension-builder (skill): Manifest V3 patterns, content scripts, service worker architecture
+  - typescript-expert (skill): Type design, async patterns, strict mode issues
+  - sprint-architect (agent): Breaking architectural changes into sprint tasks
+  - pr-review-toolkit:type-design-analyzer (agent): Review new types/interfaces
+  - pr-review-toolkit:silent-failure-hunter (agent): Review error handling strategy
+  - bug-detective (agent): Vulnerability analysis across extension + core modules
+-->
+
 ## System Overview
 
 ```

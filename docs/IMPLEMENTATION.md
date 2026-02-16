@@ -1,5 +1,42 @@
 # Implementation Plan
 
+<!-- Claude Code Tooling (per sprint):
+
+  Phase 1 (Core Module) - COMPLETED: Sprints 1.1-1.3
+  Sprint 1.4 Validation:
+    - bug-detective (agent): Find edge cases in extraction/categorization
+    - pr-review-toolkit:silent-failure-hunter (agent): Review error handling
+    - pr-review-toolkit:type-design-analyzer (agent): Review types.ts design
+    - pr-review-toolkit:pr-test-analyzer (agent): Test coverage gaps
+    - javascript-testing-patterns (skill): Unit test strategy
+    - typescript-expert (skill): Type-level issues
+
+  Phase 2 (Chrome Extension):
+  Sprint 2.1 Extension Scaffold:
+    - browser-extension-builder (skill): Manifest V3, CRXJS, service worker
+    - sprint-architect (agent): Break down scaffold into tasks
+    - frontend-design (skill): Settings UI
+  Sprint 2.2 Bookmark Browser + Batch:
+    - browser-extension-builder (skill): chrome.bookmarks API patterns
+    - frontend-design (skill): Tree view, processing modal
+    - webapp-testing (skill): Interactive UI testing with Playwright
+  Sprint 2.3 Content Scripts (X/LinkedIn):
+    - browser-extension-builder (skill): Content script injection, messaging
+    - bug-detective (agent): DOM selector fragility, edge cases
+  Sprint 2.4 Polish + Store Prep:
+    - frontend-design (skill): Processing status, results summary UI
+    - e2e-testing-patterns (skill): Full extension E2E tests
+    - product-manager-toolkit (skill): Chrome Web Store listing, screenshots
+    - pr-review-toolkit:review-pr (skill): Final review before release
+
+  Cross-cutting (use throughout):
+    - pr-review-toolkit:code-reviewer (agent): After writing code
+    - pr-review-toolkit:silent-failure-hunter (agent): After error handling code
+    - git-commit (skill): Conventional commits
+    - claude-md-management:revise-claude-md (skill): Update CLAUDE.md with learnings
+    - clarification (skill): When requirements are ambiguous
+-->
+
 Coding-level TODOs organized into phases and sprints.
 
 - **Phase 1:** Core processing module + Claude Code skill validation (1 week)

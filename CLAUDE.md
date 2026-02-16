@@ -250,23 +250,31 @@ tests/fixtures/
 
 ## Planning Documents
 
-Detailed specs are in `docs/`:
-- `PRODUCT.md` - user stories, MVP scope, pricing model, note templates
-- `ARCHITECTURE.md` - system design, data flow, extension structure, error handling
-- `IMPLEMENTATION.md` - sprint breakdown with coding-level TODOs (follow this for build order)
-- `BRANDING.md` - naming, build-in-public plan, launch strategy
+Detailed specs are in `docs/` (single source of truth - no other spec directories):
+- `docs/PRODUCT.md` - user stories, MVP scope, pricing, competitive landscape, strategic decisions
+- `docs/ARCHITECTURE.md` - system design, data flow, extension structure, error handling
+- `docs/IMPLEMENTATION.md` - sprint breakdown with coding-level TODOs (follow this for build order)
+- `docs/BRANDING.md` - naming, build-in-public plan, launch strategy
 
-**Start with `IMPLEMENTATION.md`** - it has the sprint order and checkboxes.
+Each doc file has a `<!-- Claude Code Tooling -->` comment at the top listing which agents and skills to use for work described in that file.
+
+**Start with `docs/IMPLEMENTATION.md`** - it has the sprint order, checkboxes, and per-sprint agent/skill mapping.
+
+## Current Progress
+
+- **Phase 1 (Core Module):** Sprints 1.1-1.3 COMPLETE. Sprint 1.4 (Validation) remaining.
+- **Phase 2 (Extension):** Not started. Sprints 2.1-2.4 pending.
+- **Phase 3 (Managed Tier):** Future. Only after Phase 2 live with 100+ installs.
 
 ## Phase Boundaries
 
-### Phase 1 (Week 1): Core Module
+### Phase 1 (Week 1): Core Module - Sprints 1.1-1.3 DONE
 
 Build and test `src/core/` only. No extension code yet. Validate with standalone test scripts against real URLs and real Obsidian vault.
 
 **Done when:** 20+ URLs processed, >80% categorized correctly, notes appear in Obsidian.
 
-### Phase 2 (Week 2-3): Extension
+### Phase 2 (Week 2-3): Extension - NEXT
 
 Wire core module into Chrome extension. Build popup UI, content scripts, service worker.
 
@@ -277,6 +285,38 @@ Wire core module into Chrome extension. Build popup UI, content scripts, service
 Serverless proxy, Stripe, additional LLM providers, duplicate detection, Facebook/Instagram.
 
 **Only start after:** Phase 2 live with 100+ Chrome Web Store installs.
+
+## Agent & Skill Guide
+
+When working on this project, use these specialized tools. Each `docs/*.md` file also has tooling annotations in HTML comments at the top.
+
+### Skills (invoke via `/skill-name` or Skill tool)
+
+| Skill | When to Use |
+|-------|-------------|
+| `browser-extension-builder` | Manifest V3 patterns, content scripts, service worker, CRXJS setup |
+| `typescript-expert` | Type design issues, async patterns, strict mode problems |
+| `javascript-testing-patterns` | Unit test strategy, Vitest patterns, mocking |
+| `frontend-design` | Popup UI components, settings page, dark mode styling |
+| `webapp-testing` | Interactive UI testing with Playwright |
+| `e2e-testing-patterns` | Full extension E2E test suites |
+| `product-manager-toolkit` | Feature prioritization, Chrome Web Store listing, GTM |
+| `git-commit` | Conventional commits |
+| `clarification` | When requirements are ambiguous - ask before deciding |
+| `pr-review-toolkit:review-pr` | Comprehensive PR review before merging |
+| `claude-md-management:revise-claude-md` | Update this file with session learnings |
+
+### Agents (invoke via Task tool)
+
+| Agent | When to Use |
+|-------|-------------|
+| `sprint-architect` | Break features into sprint tasks, analyze integration points |
+| `bug-detective` | Vulnerability analysis, edge case detection |
+| `pr-review-toolkit:code-reviewer` | After writing code - style and pattern check |
+| `pr-review-toolkit:silent-failure-hunter` | After error handling code - find swallowed errors |
+| `pr-review-toolkit:type-design-analyzer` | After adding new types/interfaces |
+| `pr-review-toolkit:pr-test-analyzer` | After writing tests - coverage gap analysis |
+| `cofounder` | Product strategy decisions, roadmap pivots |
 
 
 <claude-mem-context>

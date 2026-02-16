@@ -1,5 +1,10 @@
 # Build-in-Public & Branding Strategy
 
+<!-- Claude Code Tooling:
+  - product-manager-toolkit (skill): GTM strategy, launch planning, pricing decisions
+  - cofounder (agent): Overall product-market positioning
+-->
+
 This project is a brand play first, micro-SaaS second. The content generated during the build process is worth as much as the tool itself.
 
 ---
