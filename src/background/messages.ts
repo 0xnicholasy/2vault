@@ -19,6 +19,7 @@ export interface ProcessingState {
   currentStatus: UrlStatus;
   startedAt: number;
   cancelled: boolean;
+  error?: string;
 }
 
 /** Messages from popup -> service worker */

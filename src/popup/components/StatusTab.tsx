@@ -79,7 +79,7 @@ export function StatusTab({ processingState, onProcess, onSwitchTab }: StatusTab
 
   return (
     <div className="status-tab">
-      {processingState?.active && (
+      {(processingState?.active || processingState?.error) && (
         <ProcessingStatus
           state={processingState}
           vaultName={vaultName}

@@ -154,6 +154,31 @@ describe("ProcessingStatus", () => {
     );
   });
 
+  it("shows batch error banner when state.error is set", () => {
+    const state = makeState({
+      active: false,
+      error: "VaultClientError: Network error: Failed to fetch",
+      results: [
+        { url: "https://example.com/1", status: "failed", error: "Network error" },
+        { url: "https://example.com/2", status: "failed", error: "Network error" },
+      ],
+    });
+
+    render(<ProcessingStatus state={state} vaultName="" onCancel={vi.fn()} />);
+
+    const banner = screen.getByRole("alert");
+    expect(banner).toBeInTheDocument();
+    expect(banner.textContent).toContain("VaultClientError: Network error: Failed to fetch");
+  });
+
+  it("does not show error banner when state.error is undefined", () => {
+    const state = makeState({ active: false, results: [] });
+
+    render(<ProcessingStatus state={state} vaultName="" onCancel={vi.fn()} />);
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("hides Obsidian links when vaultName is empty", () => {
     const note = makeNote();
     const state = makeState({

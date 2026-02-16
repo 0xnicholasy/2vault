@@ -329,6 +329,78 @@ describe("VaultClient.createNote", () => {
   });
 });
 
+// -- Path encoding ------------------------------------------------------------
+
+describe("VaultClient path encoding", () => {
+  it("encodes path segments individually, preserving slashes", async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    await client.createNote("Inbox/my-note.md", "content");
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    // Slash between Inbox and my-note.md must NOT be encoded
+    expect(url).toBe(`${VAULT_URL}/vault/Inbox/my-note.md`);
+    expect(url).not.toContain("%2F");
+  });
+
+  it("encodes special characters in folder and file names", async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    await client.createNote("My Notes/AI & ML/note #1.md", "content");
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    // Slashes preserved, special chars encoded
+    expect(url).toContain("/vault/My%20Notes/AI%20%26%20ML/note%20%231.md");
+    expect(url).not.toContain("%2F");
+  });
+
+  it("encodes spaces in path correctly", async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    await client.createNote("My Folder/my note.md", "content");
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toBe(`${VAULT_URL}/vault/My%20Folder/my%20note.md`);
+  });
+
+  it("uses per-segment encoding in listFolders subfolder requests", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === `${VAULT_URL}/vault/`) {
+        return Promise.resolve(
+          jsonResponse({ files: ["My Folder/note.md"] })
+        );
+      }
+      return Promise.resolve(jsonResponse({ files: [] }));
+    });
+
+    const client = new VaultClient(VAULT_URL, API_KEY);
+    await client.listFolders();
+
+    const calledUrls = mockFetch.mock.calls.map(
+      (call) => (call as [string])[0]
+    );
+    const subfolderCall = calledUrls.find((u) =>
+      u.includes("My%20Folder")
+    );
+    expect(subfolderCall).toBeDefined();
+    expect(subfolderCall).not.toContain("%2F");
+  });
+
+  it("uses per-segment encoding in sampleNotes", async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ files: ["Resources/AI/note.md"] }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    await client.sampleNotes("Resources/AI", 5);
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toBe(`${VAULT_URL}/vault/Resources/AI/`);
+    expect(url).not.toContain("%2F");
+  });
+});
+
 // -- Error handling -----------------------------------------------------------
 
 describe("VaultClient error handling", () => {

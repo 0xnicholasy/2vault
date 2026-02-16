@@ -14,8 +14,20 @@ import {
 import type { SummarizationResult } from "@/core/llm-shared";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_AUTH_URL = "https://openrouter.ai/api/v1/auth/key";
 const SUMMARIZATION_MODEL = "google/gemini-2.0-flash-001";
 const CATEGORIZATION_MODEL = "google/gemini-2.0-flash-001";
+
+/**
+ * Test OpenRouter API key validity by calling their auth/key endpoint.
+ * Returns true if the key is valid and has credits.
+ */
+export async function testOpenRouterConnection(apiKey: string): Promise<boolean> {
+  const response = await fetch(OPENROUTER_AUTH_URL, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  return response.ok;
+}
 
 const SUMMARIZE_FUNCTION = {
   type: "function" as const,

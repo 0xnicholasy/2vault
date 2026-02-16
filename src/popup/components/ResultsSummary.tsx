@@ -86,14 +86,17 @@ export function ResultsSummary({
           </tr>
         </thead>
         <tbody>
-          {displayed.map((result) => (
-            <tr key={result.url}>
+          {displayed.map((result, index) => (
+            <tr key={`${index}-${result.url}`} title={result.error ?? undefined}>
               <td title={result.url}>{formatUrl(result.url)}</td>
               <td>{result.folder ?? "-"}</td>
               <td>
                 <span className={`status-badge status-badge-${result.status}`}>
                   {result.status}
                 </span>
+                {result.status === "failed" && result.error && (
+                  <div className="error-details">{result.error}</div>
+                )}
               </td>
               {vaultName && (
                 <td>

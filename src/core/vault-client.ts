@@ -8,6 +8,18 @@ import { MAX_FOLDERS, MAX_TAGS } from "@/utils/config";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * Encode a vault path by encoding each segment individually.
+ * This preserves forward slashes as path separators while encoding
+ * special characters within folder/file names.
+ * Using encodeURIComponent on the full path encodes "/" to "%2F",
+ * which Chrome's fetch preserves (unlike Bun/Node which normalize it back).
+ * The Obsidian REST API treats "%2F" as a literal character, not a path separator.
+ */
+function encodeVaultPath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
 export class VaultClient {
   constructor(
     private baseUrl: string,
@@ -115,7 +127,7 @@ export class VaultClient {
       try {
         const listing = await this.request<VaultListResponse>(
           "GET",
-          `/vault/${encodeURIComponent(topFolder)}/`
+          `/vault/${encodeVaultPath(topFolder)}/`
         );
         for (const filePath of listing.files) {
           const lastSlash = filePath.lastIndexOf("/");
@@ -152,7 +164,7 @@ export class VaultClient {
   async sampleNotes(folder: string, limit: number): Promise<NotePreview[]> {
     const listing = await this.request<VaultListResponse>(
       "GET",
-      `/vault/${encodeURIComponent(folder)}/`
+      `/vault/${encodeVaultPath(folder)}/`
     );
 
     const mdFiles = listing.files
@@ -172,7 +184,7 @@ export class VaultClient {
 
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}/vault/${encodeURIComponent(path)}`, {
+      response = await fetch(`${this.baseUrl}/vault/${encodeVaultPath(path)}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${this.apiKey}`,

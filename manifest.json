@@ -5,12 +5,7 @@
   "description": "AI extension that reads, digests, and files your bookmarks into Obsidian. Vault-aware categorization. BYOK. Open source.",
   "permissions": ["bookmarks", "activeTab", "storage", "scripting", "notifications"],
   "host_permissions": [
-    "https://x.com/*",
-    "https://twitter.com/*",
-    "https://www.linkedin.com/*",
-    "http://localhost:*",
-    "https://localhost:*",
-    "https://openrouter.ai/*"
+    "*://*/*"
   ],
   "action": {
     "default_popup": "src/popup/popup.html",

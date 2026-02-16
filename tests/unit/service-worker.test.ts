@@ -402,6 +402,132 @@ describe("Service worker - keyboard shortcut", () => {
   });
 });
 
+// -- Batch error handling -----------------------------------------------------
+
+describe("Service worker - batch error handling", () => {
+  it("sets error field when processUrls throws", async () => {
+    mockProcessUrls.mockRejectedValue(
+      new Error("VaultClientError: Network error: Failed to fetch")
+    );
+
+    const sendResponse = vi.fn();
+    messageListener!(
+      { type: "START_PROCESSING", urls: ["https://example.com/a"] },
+      {} as chrome.runtime.MessageSender,
+      sendResponse
+    );
+
+    await vi.waitFor(() => {
+      const calls = mockSetProcessingState.mock.calls;
+      const finalCall = calls[calls.length - 1];
+      expect(finalCall).toBeDefined();
+      const finalState = finalCall![0] as { active: boolean; error?: string };
+      expect(finalState.active).toBe(false);
+      expect(finalState.error).toBe(
+        "VaultClientError: Network error: Failed to fetch"
+      );
+    });
+  });
+
+  it("marks remaining URLs as failed when batch throws", async () => {
+    mockProcessUrls.mockRejectedValue(new Error("Vault unreachable"));
+
+    const sendResponse = vi.fn();
+    messageListener!(
+      {
+        type: "START_PROCESSING",
+        urls: ["https://example.com/a", "https://example.com/b"],
+      },
+      {} as chrome.runtime.MessageSender,
+      sendResponse
+    );
+
+    await vi.waitFor(() => {
+      const calls = mockSetProcessingState.mock.calls;
+      const finalCall = calls[calls.length - 1];
+      expect(finalCall).toBeDefined();
+      const finalState = finalCall![0] as {
+        results: Array<{ url: string; status: string; error?: string }>;
+      };
+      expect(finalState.results).toHaveLength(2);
+      expect(finalState.results[0]).toEqual(
+        expect.objectContaining({
+          url: "https://example.com/a",
+          status: "failed",
+          error: "Vault unreachable",
+        })
+      );
+      expect(finalState.results[1]).toEqual(
+        expect.objectContaining({
+          url: "https://example.com/b",
+          status: "failed",
+          error: "Vault unreachable",
+        })
+      );
+    });
+  });
+
+  it("saves history after successful batch", async () => {
+    const results = [
+      { url: "https://example.com/a", status: "success" as const, folder: "Inbox" },
+    ];
+    mockProcessUrls.mockResolvedValue(results);
+
+    const sendResponse = vi.fn();
+    messageListener!(
+      { type: "START_PROCESSING", urls: ["https://example.com/a"] },
+      {} as chrome.runtime.MessageSender,
+      sendResponse
+    );
+
+    await vi.waitFor(() => {
+      expect(mockSetLocalStorage).toHaveBeenCalledWith(
+        "processingHistory",
+        expect.arrayContaining([
+          expect.objectContaining({ url: "https://example.com/a" }),
+        ])
+      );
+    });
+  });
+
+  it("caps history at MAX_HISTORY (100)", async () => {
+    const existingHistory = Array.from({ length: 99 }, (_, i) => ({
+      url: `https://example.com/old-${i}`,
+      status: "success" as const,
+    }));
+    mockGetLocalStorage.mockResolvedValue(existingHistory);
+
+    const newResults = [
+      { url: "https://example.com/new-1", status: "success" as const, folder: "Inbox" },
+      { url: "https://example.com/new-2", status: "success" as const, folder: "Inbox" },
+    ];
+    mockProcessUrls.mockResolvedValue(newResults);
+
+    const sendResponse = vi.fn();
+    messageListener!(
+      {
+        type: "START_PROCESSING",
+        urls: ["https://example.com/new-1", "https://example.com/new-2"],
+      },
+      {} as chrome.runtime.MessageSender,
+      sendResponse
+    );
+
+    await vi.waitFor(() => {
+      expect(mockSetLocalStorage).toHaveBeenCalledWith(
+        "processingHistory",
+        expect.any(Array)
+      );
+      const historyCall = mockSetLocalStorage.mock.calls.find(
+        (c) => (c as [string, unknown])[0] === "processingHistory"
+      );
+      expect(historyCall).toBeDefined();
+      const savedHistory = (historyCall as [string, unknown[]])[1];
+      expect(savedHistory.length).toBeLessThanOrEqual(100);
+    });
+  });
+});
+
 // -- isSocialMediaUrl ---------------------------------------------------------
 
 describe("Service worker - isSocialMediaUrl", () => {

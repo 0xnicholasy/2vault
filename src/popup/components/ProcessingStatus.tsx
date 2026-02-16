@@ -37,6 +37,12 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
         {isDone ? "Processing Complete" : "Processing Bookmarks..."}
       </h3>
 
+      {state.error && (
+        <div className="batch-error-banner" role="alert">
+          Processing failed: {state.error}
+        </div>
+      )}
+
       <div className="progress-section">
         <div className="progress-bar">
           <div
@@ -63,7 +69,7 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
           const isSuccess = result?.status === "success";
 
           return (
-            <div key={url} className={`url-status-row url-status-${status}`}>
+            <div key={`${index}-${url}`} className={`url-status-row url-status-${status}`}>
               <div className="url-status-main">
                 <StatusIcon status={status} />
                 <span className="url-status-text">{formatUrl(url)}</span>

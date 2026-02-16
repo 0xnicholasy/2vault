@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { IoEye, IoEyeOff } from "react-icons/io5";
 import { VaultClient } from "@/core/vault-client";
+import { testOpenRouterConnection } from "@/core/openrouter-provider";
 import { getConfig, setSyncStorage } from "@/utils/storage";
 import { DEFAULT_VAULT_URL, DEFAULT_FOLDER } from "@/utils/config";
 
@@ -17,8 +18,8 @@ export function Settings() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [showVaultApiKey, setShowVaultApiKey] = useState(false);
 
-  const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>("idle");
+  const [llmStatus, setLlmStatus] = useState<ConnectionStatus>("idle");
+  const [vaultStatus, setVaultStatus] = useState<ConnectionStatus>("idle");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [dirty, setDirty] = useState(false);
 
@@ -35,18 +36,27 @@ export function Settings() {
   const markDirty = useCallback(() => {
     setDirty(true);
     setSaveStatus("idle");
+    setLlmStatus("idle");
+    setVaultStatus("idle");
   }, []);
 
   const handleTestConnection = useCallback(async () => {
-    setConnectionStatus("testing");
-    try {
-      const client = new VaultClient(vaultUrl, vaultApiKey);
-      const ok = await client.testConnection();
-      setConnectionStatus(ok ? "success" : "error");
-    } catch {
-      setConnectionStatus("error");
-    }
-  }, [vaultUrl, vaultApiKey]);
+    setLlmStatus("testing");
+    setVaultStatus("testing");
+
+    // Test both in parallel
+    const [llmOk, vaultOk] = await Promise.all([
+      apiKey
+        ? testOpenRouterConnection(apiKey).catch(() => false)
+        : Promise.resolve(false),
+      vaultApiKey
+        ? new VaultClient(vaultUrl, vaultApiKey).testConnection().catch(() => false)
+        : Promise.resolve(false),
+    ]);
+
+    setLlmStatus(llmOk ? "success" : "error");
+    setVaultStatus(vaultOk ? "success" : "error");
+  }, [apiKey, vaultUrl, vaultApiKey]);
 
   const handleSave = useCallback(async () => {
     setSaveStatus("saving");
@@ -111,7 +121,6 @@ export function Settings() {
             onChange={(e) => {
               setVaultApiKey(e.target.value);
               markDirty();
-              setConnectionStatus("idle");
             }}
             placeholder="Enter vault API key"
           />
@@ -163,18 +172,38 @@ export function Settings() {
         <button
           className="btn btn-secondary"
           onClick={handleTestConnection}
-          disabled={connectionStatus === "testing" || !vaultUrl || !vaultApiKey}
+          disabled={llmStatus === "testing" || vaultStatus === "testing"}
         >
-          {connectionStatus === "testing" ? "Testing..." : "Test Connection"}
+          {llmStatus === "testing" || vaultStatus === "testing"
+            ? "Testing..."
+            : "Test Connections"}
         </button>
-
-        {connectionStatus === "success" && (
-          <span className="status-success">Connected</span>
-        )}
-        {connectionStatus === "error" && (
-          <span className="status-error">Connection failed</span>
-        )}
       </div>
+
+      {(llmStatus !== "idle" || vaultStatus !== "idle") && (
+        <div className="connection-results">
+          <div className="connection-result">
+            <span>OpenRouter API:</span>
+            {llmStatus === "testing" && <span className="status-testing">Testing...</span>}
+            {llmStatus === "success" && <span className="status-success">Connected</span>}
+            {llmStatus === "error" && (
+              <span className="status-error">
+                {apiKey ? "Connection failed" : "No API key"}
+              </span>
+            )}
+          </div>
+          <div className="connection-result">
+            <span>Obsidian Vault:</span>
+            {vaultStatus === "testing" && <span className="status-testing">Testing...</span>}
+            {vaultStatus === "success" && <span className="status-success">Connected</span>}
+            {vaultStatus === "error" && (
+              <span className="status-error">
+                {vaultApiKey ? "Connection failed" : "No API key"}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="form-actions">
         <button

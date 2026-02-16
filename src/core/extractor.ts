@@ -78,7 +78,11 @@ export function extractArticle(html: string, url: string): ExtractedContent {
       return createFailedExtraction(url, "Readability could not parse content");
     }
 
-    const markdown = turndown.turndown(article.content);
+    // Turndown.turndown(string) uses global `document` to parse HTML,
+    // which doesn't exist in Chrome service workers. Parse with linkedom
+    // first and pass the DOM node instead.
+    const { document: contentDoc } = parseHTML(article.content);
+    const markdown = turndown.turndown(contentDoc.documentElement);
 
     if (!markdown.trim()) {
       return createFailedExtraction(url, "Extracted content is empty");

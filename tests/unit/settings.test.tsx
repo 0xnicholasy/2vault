@@ -3,8 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Settings } from "@/popup/components/Settings";
 
-const { mockTestConnection } = vi.hoisted(() => ({
+const { mockTestConnection, mockTestOpenRouter } = vi.hoisted(() => ({
   mockTestConnection: vi.fn(),
+  mockTestOpenRouter: vi.fn(),
 }));
 
 // Mock chrome.storage.sync
@@ -40,6 +41,10 @@ vi.mock("@/core/vault-client", () => {
   };
 });
 
+vi.mock("@/core/openrouter-provider", () => ({
+  testOpenRouterConnection: mockTestOpenRouter,
+}));
+
 beforeEach(() => {
   for (const key of Object.keys(mockSyncStore)) {
     delete mockSyncStore[key];
@@ -47,6 +52,8 @@ beforeEach(() => {
 
   mockTestConnection.mockReset();
   mockTestConnection.mockResolvedValue(true);
+  mockTestOpenRouter.mockReset();
+  mockTestOpenRouter.mockResolvedValue(true);
 
   setupChromeMock();
 });
@@ -109,54 +116,77 @@ describe("Settings", () => {
     });
   });
 
-  it("calls VaultClient.testConnection on test button click", async () => {
+  it("tests both OpenRouter and Vault on test button click", async () => {
+    mockSyncStore["apiKey"] = "sk-or-test";
     mockSyncStore["vaultApiKey"] = "existing-key";
     render(<Settings />);
 
-    // Wait for config to load before interacting
     await waitFor(() => {
       expect(screen.getByLabelText("Obsidian Vault API Key")).toHaveValue(
         "existing-key"
       );
     });
 
-    fireEvent.click(screen.getByText("Test Connection"));
+    fireEvent.click(screen.getByText("Test Connections"));
 
     await waitFor(() => {
+      expect(mockTestOpenRouter).toHaveBeenCalledWith("sk-or-test");
       expect(mockTestConnection).toHaveBeenCalled();
     });
   });
 
-  it("shows success status on successful connection test", async () => {
+  it("shows separate success statuses for both connections", async () => {
+    mockTestOpenRouter.mockResolvedValue(true);
     mockTestConnection.mockResolvedValue(true);
+    mockSyncStore["apiKey"] = "sk-or-test";
     mockSyncStore["vaultApiKey"] = "existing-key";
     render(<Settings />);
 
-    // Wait for config to load before interacting
     await waitFor(() => {
       expect(screen.getByLabelText("Obsidian Vault API Key")).toHaveValue(
         "existing-key"
       );
     });
 
-    fireEvent.click(screen.getByText("Test Connection"));
+    fireEvent.click(screen.getByText("Test Connections"));
 
     await waitFor(() => {
-      expect(screen.getByText("Connected")).toBeInTheDocument();
+      const connectedElements = screen.getAllByText("Connected");
+      expect(connectedElements).toHaveLength(2);
     });
   });
 
-  it("shows error status on failed connection test", async () => {
+  it("shows individual failure when only vault fails", async () => {
+    mockTestOpenRouter.mockResolvedValue(true);
     mockTestConnection.mockResolvedValue(false);
+    mockSyncStore["apiKey"] = "sk-or-test";
+    mockSyncStore["vaultApiKey"] = "bad-key";
     render(<Settings />);
 
-    fireEvent.change(screen.getByLabelText("Obsidian Vault API Key"), {
-      target: { value: "bad-key" },
+    await waitFor(() => {
+      expect(screen.getByLabelText("Obsidian Vault API Key")).toHaveValue(
+        "bad-key"
+      );
     });
-    fireEvent.click(screen.getByText("Test Connection"));
+
+    fireEvent.click(screen.getByText("Test Connections"));
 
     await waitFor(() => {
-      expect(screen.getByText("Connection failed")).toBeInTheDocument();
+      expect(screen.getByText("OpenRouter API:")).toBeInTheDocument();
+      expect(screen.getByText("Obsidian Vault:")).toBeInTheDocument();
+      expect(screen.getAllByText("Connected")).toHaveLength(1);
+      expect(screen.getAllByText("Connection failed")).toHaveLength(1);
+    });
+  });
+
+  it("shows 'No API key' when testing without keys configured", async () => {
+    render(<Settings />);
+
+    fireEvent.click(screen.getByText("Test Connections"));
+
+    await waitFor(() => {
+      const noKeyMessages = screen.getAllByText("No API key");
+      expect(noKeyMessages).toHaveLength(2);
     });
   });
 

@@ -51,6 +51,12 @@ export function ProcessingModal({ initialState, onClose }: ProcessingModalProps)
           <h2>{isDone ? "Processing Complete" : "Processing Bookmarks"}</h2>
         </div>
 
+        {state.error && (
+          <div className="batch-error-banner" role="alert">
+            Processing failed: {state.error}
+          </div>
+        )}
+
         <div className="progress-section">
           <div className="progress-bar">
             <div
@@ -71,11 +77,18 @@ export function ProcessingModal({ initialState, onClose }: ProcessingModalProps)
         <div className="url-status-list">
           {state.urls.map((url, index) => {
             const status = getUrlStatus(url, index, state);
+            const result = state.results.find((r) => r.url === url);
+            const errorMsg = result?.status === "failed" ? result.error : undefined;
             return (
-              <div key={url} className={`url-status-row url-status-${status}`}>
-                <StatusIcon status={status} />
-                <span className="url-status-text">{formatUrl(url)}</span>
-                <span className="url-status-label">{status}</span>
+              <div key={`${index}-${url}`} className={`url-status-row url-status-${status}`}>
+                <div className="url-status-main">
+                  <StatusIcon status={status} />
+                  <span className="url-status-text">{formatUrl(url)}</span>
+                  <span className="url-status-label">{status}</span>
+                </div>
+                {errorMsg && (
+                  <div className="error-details">{errorMsg}</div>
+                )}
               </div>
             );
           })}

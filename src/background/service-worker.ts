@@ -146,28 +146,29 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
   const state = createInitialState(urls);
   await setProcessingState(state);
 
-  const config = await getConfig();
-  const provider = createDefaultProvider(config);
-
   const results: ProcessingResult[] = [];
-
-  const onProgress = async (
-    url: string,
-    status: string,
-    index: number,
-    _total: number
-  ) => {
-    if (cancelRequested) return;
-    await setProcessingState({
-      ...state,
-      currentIndex: index,
-      currentUrl: url,
-      currentStatus: status as UrlStatus,
-      results,
-    });
-  };
+  let batchError: string | undefined;
 
   try {
+    const config = await getConfig();
+    const provider = createDefaultProvider(config);
+
+    const onProgress = async (
+      url: string,
+      status: string,
+      index: number,
+      _total: number
+    ) => {
+      if (cancelRequested) return;
+      await setProcessingState({
+        ...state,
+        currentIndex: index,
+        currentUrl: url,
+        currentStatus: status as UrlStatus,
+        results,
+      });
+    };
+
     const allResults = await processUrls(
       urls,
       config,
@@ -179,9 +180,18 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Processing failed";
     console.error("[2Vault] Batch processing error:", message);
+    batchError = message;
+
+    // Mark any remaining URLs (not yet in results) as failed
+    const processedUrls = new Set(results.map((r) => r.url));
+    for (const url of urls) {
+      if (!processedUrls.has(url)) {
+        results.push({ url, status: "failed", error: message });
+      }
+    }
   }
 
-  // Save final state
+  // Save final state - always runs, even if getConfig/createDefaultProvider threw
   await setProcessingState({
     ...state,
     active: false,
@@ -190,6 +200,7 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
     currentIndex: urls.length,
     currentUrl: "",
     currentStatus: "done",
+    error: batchError,
   });
 
   // Append to processing history
@@ -272,8 +283,27 @@ chrome.runtime.onMessage.addListener(
           sendResponse({ type: "PROCESSING_ALREADY_ACTIVE" });
           return;
         }
-        runBatchProcessing(urls).catch((err) => {
-          console.error("[2Vault] Processing failed:", err);
+        runBatchProcessing(urls).catch(async (err) => {
+          // Last-resort handler: if runBatchProcessing itself throws
+          // (e.g. setProcessingState fails), save error state so the UI can show it
+          const message = err instanceof Error ? err.message : "Processing failed";
+          console.error("[2Vault] Unhandled processing error:", message);
+          try {
+            await setProcessingState({
+              active: false,
+              urls,
+              results: urls.map((u) => ({ url: u, status: "failed" as const, error: message })),
+              currentIndex: urls.length,
+              currentUrl: "",
+              currentStatus: "done" as UrlStatus,
+              startedAt: Date.now(),
+              cancelled: false,
+              error: message,
+            });
+          } catch {
+            // If even this fails, nothing more we can do
+            console.error("[2Vault] Failed to save error state");
+          }
         });
         sendResponse({ type: "PROCESSING_STARTED" });
       });
