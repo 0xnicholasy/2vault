@@ -166,4 +166,29 @@ describe("Settings", () => {
     const saveBtn = screen.getByText("Save Settings");
     expect(saveBtn).toBeDisabled();
   });
+
+  it("renders vault name field and saves it", async () => {
+    render(<Settings />);
+
+    const vaultNameInput = screen.getByLabelText("Vault Name");
+    expect(vaultNameInput).toBeInTheDocument();
+
+    fireEvent.change(vaultNameInput, { target: { value: "My Vault" } });
+    fireEvent.click(screen.getByText("Save Settings"));
+
+    await waitFor(() => {
+      expect(chrome.storage.sync.set).toHaveBeenCalledWith({
+        vaultName: "My Vault",
+      });
+    });
+  });
+
+  it("loads existing vault name on mount", async () => {
+    mockSyncStore["vaultName"] = "Test Vault";
+    render(<Settings />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Vault Name")).toHaveValue("Test Vault");
+    });
+  });
 });

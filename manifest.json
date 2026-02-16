@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "2Vault",
+  "name": "2Vault - AI Bookmark Digester",
   "version": "0.0.1",
-  "description": "AI-powered bookmark digester for Obsidian",
+  "description": "AI extension that reads, digests, and files your bookmarks into Obsidian. Vault-aware categorization. BYOK. Open source.",
   "permissions": ["bookmarks", "activeTab", "storage", "scripting", "notifications"],
   "host_permissions": [
     "https://x.com/*",

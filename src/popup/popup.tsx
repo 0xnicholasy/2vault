@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Settings } from "./components/Settings";
 import { BookmarkBrowser } from "./components/BookmarkBrowser";
 import { ProcessingModal } from "./components/ProcessingModal";
+import { StatusTab } from "./components/StatusTab";
 import { getProcessingState } from "@/utils/storage";
 import "./styles/popup.css";
 
@@ -22,7 +23,7 @@ interface TabDef {
 const TABS: TabDef[] = [
   { id: "settings", label: "Settings", icon: <IoSettingsSharp />, disabled: false },
   { id: "bookmarks", label: "Bookmarks", icon: <IoBookmarks />, disabled: false },
-  { id: "status", label: "Status", icon: <IoStatsChart />, disabled: true },
+  { id: "status", label: "Status", icon: <IoStatsChart />, disabled: false },
 ];
 
 function App() {
@@ -72,6 +73,10 @@ function App() {
     setShowModal(false);
   }, []);
 
+  const handleSwitchTab = useCallback((tab: Tab) => {
+    setActiveTab(tab);
+  }, []);
+
   const isProcessing = processingState?.active ?? false;
 
   return (
@@ -105,7 +110,13 @@ function App() {
               processing={isProcessing}
             />
           )}
-          {activeTab === "status" && <div className="placeholder">Status (Sprint 2.4)</div>}
+          {activeTab === "status" && (
+            <StatusTab
+              processingState={processingState}
+              onProcess={handleStartProcessing}
+              onSwitchTab={handleSwitchTab}
+            />
+          )}
         </ErrorBoundary>
       </main>
 

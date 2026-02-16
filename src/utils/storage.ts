@@ -7,6 +7,7 @@ interface SyncStorage {
   vaultUrl: string;
   vaultApiKey: string;
   defaultFolder: string;
+  vaultName: string;
 }
 
 interface LocalStorage {
@@ -45,13 +46,14 @@ export async function setLocalStorage<K extends keyof LocalStorage>(
 }
 
 export async function getConfig(): Promise<Config> {
-  const [apiKey, llmProvider, vaultUrl, vaultApiKey, defaultFolder] =
+  const [apiKey, llmProvider, vaultUrl, vaultApiKey, defaultFolder, vaultName] =
     await Promise.all([
       getSyncStorage("apiKey"),
       getSyncStorage("llmProvider"),
       getSyncStorage("vaultUrl"),
       getSyncStorage("vaultApiKey"),
       getSyncStorage("defaultFolder"),
+      getSyncStorage("vaultName"),
     ]);
 
   return {
@@ -60,6 +62,7 @@ export async function getConfig(): Promise<Config> {
     vaultUrl: vaultUrl ?? "https://localhost:27124",
     vaultApiKey: vaultApiKey ?? "",
     defaultFolder: defaultFolder ?? "Inbox",
+    vaultName: vaultName ?? "",
   };
 }
 
@@ -76,4 +79,13 @@ export async function setProcessingState(
 
 export async function clearProcessingState(): Promise<void> {
   await chrome.storage.local.remove("processingState");
+}
+
+export async function getProcessingHistory(): Promise<ProcessingResult[]> {
+  const history = await getLocalStorage("processingHistory");
+  return history ?? [];
+}
+
+export async function clearProcessingHistory(): Promise<void> {
+  await chrome.storage.local.remove("processingHistory");
 }

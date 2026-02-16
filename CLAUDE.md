@@ -275,7 +275,7 @@ Progress is tracked in `docs/IMPLEMENTATION.md` using this legend:
 
 **Status:**
 - **Phase 1 (Core Module):** Sprints 1.1-1.4 [x] DONE. API frozen.
-- **Phase 2 (Extension):** Sprints 2.1-2.2 [x] DONE. Sprint 2.3-2.4 [ ] TODO (next).
+- **Phase 2 (Extension):** Sprints 2.1-2.4 [x] DONE.
 - **Phase 3 (Managed Tier):** [~] DEFERRED (only after Phase 2 live with 100+ installs).
 
 ## Phase Boundaries

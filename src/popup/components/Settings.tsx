@@ -12,6 +12,7 @@ export function Settings() {
   const [vaultUrl, setVaultUrl] = useState(DEFAULT_VAULT_URL);
   const [vaultApiKey, setVaultApiKey] = useState("");
   const [defaultFolder, setDefaultFolder] = useState(DEFAULT_FOLDER);
+  const [vaultName, setVaultName] = useState("");
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [showVaultApiKey, setShowVaultApiKey] = useState(false);
@@ -27,6 +28,7 @@ export function Settings() {
       setVaultUrl(config.vaultUrl);
       setVaultApiKey(config.vaultApiKey);
       setDefaultFolder(config.defaultFolder);
+      setVaultName(config.vaultName);
     });
   }, []);
 
@@ -53,10 +55,11 @@ export function Settings() {
       setSyncStorage("vaultUrl", vaultUrl),
       setSyncStorage("vaultApiKey", vaultApiKey),
       setSyncStorage("defaultFolder", defaultFolder),
+      setSyncStorage("vaultName", vaultName),
     ]);
     setDirty(false);
     setSaveStatus("saved");
-  }, [apiKey, vaultUrl, vaultApiKey, defaultFolder]);
+  }, [apiKey, vaultUrl, vaultApiKey, defaultFolder, vaultName]);
 
   return (
     <div className="settings">
@@ -137,6 +140,23 @@ export function Settings() {
           }}
           placeholder={DEFAULT_FOLDER}
         />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="vaultName">Vault Name</label>
+        <input
+          id="vaultName"
+          type="text"
+          value={vaultName}
+          onChange={(e) => {
+            setVaultName(e.target.value);
+            markDirty();
+          }}
+          placeholder="My Vault"
+        />
+        <span className="form-hint">
+          Used for "View in Obsidian" links. Must match your vault name exactly.
+        </span>
       </div>
 
       <div className="form-actions">

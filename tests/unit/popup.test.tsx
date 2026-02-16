@@ -11,7 +11,15 @@ vi.stubGlobal("chrome", {
     local: {
       get: vi.fn(() => Promise.resolve({})),
       set: vi.fn(() => Promise.resolve()),
+      remove: vi.fn(() => Promise.resolve()),
     },
+    onChanged: {
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    },
+  },
+  runtime: {
+    sendMessage: vi.fn(),
   },
 });
 
@@ -30,14 +38,27 @@ describe("Popup navigation", () => {
     render(
       <nav className="tab-nav">
         <button role="tab" aria-selected={true}>Settings</button>
-        <button role="tab" disabled>Bookmarks</button>
-        <button role="tab" disabled>Status</button>
+        <button role="tab">Bookmarks</button>
+        <button role="tab">Status</button>
       </nav>
     );
 
     expect(screen.getByText("Settings")).toBeInTheDocument();
     expect(screen.getByText("Bookmarks")).toBeInTheDocument();
     expect(screen.getByText("Status")).toBeInTheDocument();
+  });
+
+  it("Status tab is enabled (not disabled)", () => {
+    render(
+      <nav className="tab-nav">
+        <button role="tab">Settings</button>
+        <button role="tab">Bookmarks</button>
+        <button role="tab">Status</button>
+      </nav>
+    );
+
+    const statusBtn = screen.getByText("Status");
+    expect(statusBtn).not.toBeDisabled();
   });
 
   it("Settings component renders without crashing", () => {

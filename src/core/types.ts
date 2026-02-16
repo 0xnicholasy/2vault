@@ -55,6 +55,7 @@ export interface Config {
   vaultUrl: string;
   vaultApiKey: string;
   defaultFolder: string;
+  vaultName: string;
 }
 
 /** Response from GET /vault/ and GET /vault/{dir}/ - returns plain string paths */

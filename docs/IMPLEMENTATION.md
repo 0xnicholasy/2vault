@@ -296,11 +296,11 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 - [x] Timeout: 15s per URL (close tab on timeout)
 - [~] User notification: "2Vault is processing your bookmarks (opening tabs briefly)"
 
-### Sprint 2.4: Polish + Extension Store Prep (Day 6-8) [TODO]
+### Sprint 2.4: Polish + Extension Store Prep (Day 6-8) [DONE]
 
 #### 2.4.1 Processing status UI
 
-- [ ] Build `ProcessingStatus` component:
+- [x] Build `ProcessingStatus` component:
   - List of URLs being processed
   - Per-URL status: queued / fetching / summarizing / categorizing / creating / done / failed
   - Overall progress bar
@@ -309,7 +309,7 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 
 #### 2.4.2 Results summary
 
-- [ ] Build `ResultsSummary` component:
+- [x] Build `ResultsSummary` component:
   - Table: URL | Folder | Tags | Status
   - Filter: show all / show failures only
   - Retry button for failed URLs
@@ -317,18 +317,18 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 
 #### 2.4.3 Extension icon + branding
 
-- [ ] Design extension icon (16x16, 32x32, 48x48, 128x128)
-- [ ] Extension name: "2Vault - AI Bookmark Digester"
-- [ ] Short description for Chrome Web Store (132 char limit)
-- [ ] Screenshots (1280x800 or 640x400) for store listing
+- [x] Design extension icon (16x16, 32x32, 48x48, 128x128)
+- [x] Extension name: "2Vault - AI Bookmark Digester"
+- [x] Short description for Chrome Web Store (132 char limit)
+- [~] Screenshots (1280x800 or 640x400) for store listing
 
 #### 2.4.4 Error states + edge cases
 
-- [ ] No API key configured -> redirect to settings with helper text
-- [ ] Obsidian not running -> clear error message + setup guide link
-- [ ] Empty bookmark folder -> "No bookmarks in this folder" state
-- [ ] All URLs failed -> "Something went wrong" with retry + troubleshooting
-- [ ] Extension update handling (preserve settings across updates)
+- [x] No API key configured -> redirect to settings with helper text
+- [~] Obsidian not running -> clear error message + setup guide link
+- [x] Empty bookmark folder -> "No bookmarks in this folder" state
+- [x] All URLs failed -> "Something went wrong" with retry + troubleshooting
+- [x] Extension update handling (preserve settings across updates)
 
 ---
 

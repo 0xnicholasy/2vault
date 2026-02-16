@@ -151,6 +151,12 @@ body {
   color: var(--ctp-overlay0);
 }
 
+.form-hint {
+  font-size: 11px;
+  color: var(--ctp-overlay0);
+  line-height: 1.4;
+}
+
 /* Password toggle */
 
 .input-with-toggle {
@@ -524,4 +530,244 @@ body {
   border-top: 1px solid var(--ctp-surface0);
   display: flex;
   justify-content: flex-end;
+}
+
+/* Processing status (in-tab) */
+
+.processing-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.processing-status-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ctp-text);
+}
+
+.processing-status .url-status-list {
+  max-height: 200px;
+  padding: 0;
+}
+
+.processing-status .url-status-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.url-status-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.error-toggle {
+  background: none;
+  border: none;
+  color: var(--ctp-subtext0);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.error-toggle:hover {
+  color: var(--ctp-text);
+}
+
+.error-details {
+  margin-top: 4px;
+  margin-left: 22px;
+  padding: 6px 8px;
+  background: var(--ctp-surface0);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--ctp-red);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.obsidian-link {
+  color: var(--ctp-mauve);
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.obsidian-link:hover {
+  color: var(--ctp-text);
+}
+
+.processing-status-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+/* Results summary */
+
+.results-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.results-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.results-summary-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ctp-text);
+}
+
+.results-filters {
+  display: flex;
+  gap: 4px;
+}
+
+.filter-btn {
+  padding: 3px 8px;
+  border: 1px solid var(--ctp-surface1);
+  border-radius: 4px;
+  background: none;
+  color: var(--ctp-subtext0);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.filter-btn:hover {
+  color: var(--ctp-text);
+  border-color: var(--ctp-surface2);
+}
+
+.filter-btn.active {
+  background: var(--ctp-surface1);
+  color: var(--ctp-text);
+  border-color: var(--ctp-mauve);
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.results-table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ctp-subtext0);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--ctp-surface1);
+}
+
+.results-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--ctp-surface0);
+  color: var(--ctp-subtext1);
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results-table tr:last-child td {
+  border-bottom: none;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge-success {
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--ctp-green);
+}
+
+.status-badge-failed {
+  background: rgba(243, 139, 168, 0.15);
+  color: var(--ctp-red);
+}
+
+.all-failed-banner {
+  padding: 12px;
+  background: rgba(243, 139, 168, 0.1);
+  border: 1px solid rgba(243, 139, 168, 0.3);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.all-failed-banner p {
+  font-size: 12px;
+  color: var(--ctp-red);
+  font-weight: 600;
+}
+
+.all-failed-banner ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 11px;
+  color: var(--ctp-subtext0);
+  line-height: 1.6;
+}
+
+.all-failed-banner-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: var(--ctp-subtext0);
+  font-size: 13px;
+}
+
+.results-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Status tab */
+
+.status-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.config-guard-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--ctp-subtext0);
+  font-size: 13px;
 }

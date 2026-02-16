@@ -1,55 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import {
-  IoCheckmarkCircle,
-  IoCloseCircle,
-  IoEllipsisHorizontal,
-  IoHourglass,
-} from "react-icons/io5";
-import type { ProcessingState, UrlStatus } from "@/background/messages.ts";
+import type { ProcessingState } from "@/background/messages.ts";
 import { getProcessingState } from "@/utils/storage";
+import { StatusIcon, getUrlStatus, formatUrl } from "@/popup/utils/processing-ui";
 
 interface ProcessingModalProps {
   initialState: ProcessingState;
   onClose: () => void;
-}
-
-function StatusIcon({ status }: { status: UrlStatus }) {
-  switch (status) {
-    case "done":
-      return <IoCheckmarkCircle className="status-icon status-icon-done" />;
-    case "failed":
-      return <IoCloseCircle className="status-icon status-icon-failed" />;
-    case "queued":
-      return <IoHourglass className="status-icon status-icon-queued" />;
-    default:
-      return <IoEllipsisHorizontal className="status-icon status-icon-active" />;
-  }
-}
-
-function getUrlStatus(
-  url: string,
-  index: number,
-  state: ProcessingState
-): UrlStatus {
-  const result = state.results.find((r) => r.url === url);
-  if (result) {
-    return result.status === "success" ? "done" : "failed";
-  }
-  if (index === state.currentIndex && state.active) {
-    return state.currentStatus;
-  }
-  return "queued";
-}
-
-function formatUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return parsed.hostname + (parsed.pathname.length > 30
-      ? parsed.pathname.slice(0, 30) + "..."
-      : parsed.pathname);
-  } catch {
-    return url.length > 40 ? url.slice(0, 40) + "..." : url;
-  }
 }
 
 export function ProcessingModal({ initialState, onClose }: ProcessingModalProps) {
