@@ -30,6 +30,7 @@ The key differentiators:
 2. **Social media capture** -- DOM-level extraction for X and LinkedIn (no flaky APIs)
 3. **Batch processing** -- select an entire bookmark folder and process all URLs at once
 4. **BYOK model** -- bring your own API key, keep costs transparent
+5. **PARA-native organization** -- built-in second brain structure with Projects, Areas, Resources, Archive
 
 ## User Stories
 
@@ -46,17 +47,28 @@ The key differentiators:
 6. As a user, I want to capture X/Twitter posts and LinkedIn posts as readable notes in my vault.
 7. As a user, I want to bring my own Claude/OpenAI API key so I control costs and data privacy.
 
+### Phase 2.5 (Core Intelligence)
+
+8. As a user, I want duplicate detection so I don't re-process URLs I've already saved.
+9. As a user, I want my vault organized using PARA so my second brain has a clear structure.
+10. As a user, I want to define tag groups so similar content gets consistent tags.
+11. As a user, I want automatic linking to related existing notes via tag hub notes in my vault.
+
+### Phase 2.6 (UX Polish)
+
+12. As a user, I want to paste a URL directly and process it without bookmarking first.
+13. As a user, I want validation errors on my API keys before saving so I don't waste time debugging.
+14. As a user, I want clear error categories and actionable suggestions when processing fails.
+
 ### Phase 3 (Growth)
 
-8. As a non-technical user, I want a managed tier where I don't need an API key -- just pay and it works.
-9. As a user, I want duplicate detection so I don't re-process URLs I've already saved.
-10. As a user, I want to see a preview of categorization before notes are created so I can correct mistakes.
+15. As a non-technical user, I want a managed tier where I don't need an API key -- just pay and it works.
+16. As a user, I want to see a preview of categorization before notes are created so I can correct mistakes.
 
 ### Future
 
-11. As a user, I want to process YouTube videos by extracting transcripts.
-12. As a user, I want to capture Facebook and Instagram text posts.
-13. As a user, I want automatic linking to related existing notes in my vault.
+17. As a user, I want to process YouTube videos by extracting transcripts.
+18. As a user, I want to capture Facebook and Instagram text posts.
 
 ## MVP Scope (Extension)
 
@@ -85,6 +97,12 @@ The key differentiators:
 - BYOK: user enters their own API key in extension settings
 - Graceful failure for URLs that can't be fetched (log error, skip, continue)
 - Processing status/progress in popup
+- PARA organization system as default (Projects, Areas, Resources, Archive)
+- Duplicate URL detection (skip already-saved URLs)
+- Direct URL input (paste URLs without bookmarking)
+- User-defined tag groups for consistent categorization
+- Tag hub notes for Obsidian graph view connectivity
+- API key format validation with inline errors
 
 ### Out of Scope (MVP)
 
@@ -92,8 +110,7 @@ The key differentiators:
 - YouTube transcript extraction
 - Facebook / Instagram
 - PDF processing
-- Duplicate detection
-- Bidirectional linking to existing notes
+- Full bidirectional linking to existing notes (tag hub notes partially address this)
 - MOC (Map of Content) updates
 - Obsidian community plugin (companion for vault-side management)
 - Firefox / Safari / Edge extensions
@@ -127,10 +144,16 @@ status: unread
 - Second key point
 - Third key point
 
+## Related Tags
+
+[[typescript]] | [[design-patterns]] | [[architecture]]
+
 ## Source
 
 [Original Article](https://example.com/article)
 ```
+
+**Note path example (PARA mode):** `Resources/TypeScript/article-title-here.md`
 
 ### Social Media Note Template
 
@@ -215,20 +238,21 @@ status: unread
 - **Batch processing:** `chrome.bookmarks` API -- user selects bookmark folder, processes all URLs in it
 - **Target PKM:** Obsidian only (MVP). Graph view advantage for knowledge connections.
 - **Build-in-public:** 5-7 X/Twitter posts documenting the build process
+- **Organization system:** PARA as default with Custom fallback. Two-level depth: PARA bucket + topic subfolder (e.g., Resources/AI/).
 - **Time budget:** ~2.5-3 weeks total. Kill if not 50% done by end of week 2.
 
 ---
 
 ## Competitive Landscape
 
-| Tool | AI Summary | Batch URLs | Obsidian Native | Vault-Aware | Social Media | Price |
-|------|-----------|------------|-----------------|-------------|--------------|-------|
-| Readwise Reader | Partial | No | Highlights only | No | Twitter sync | $10-13/mo |
-| Recall | Yes | Partial | No | No | No | $7-10/mo |
-| Fabric (29K stars) | DIY | Manual CLI | No | No | No | Free (BYOK) |
-| Obsidian Web Clipper | No | No | Yes | No | No | Free |
-| Karakeep (Hoarder) | Tags only | No | No | No | No | Free (self-host) |
-| **2Vault** | **Yes** | **Yes** | **Yes** | **Yes** | **Yes (DOM)** | **Free + $12-15/mo** |
+| Tool | AI Summary | Batch URLs | Obsidian Native | Vault-Aware | Social Media | PARA | Price |
+|------|-----------|------------|-----------------|-------------|--------------|------|-------|
+| Readwise Reader | Partial | No | Highlights only | No | Twitter sync | No | $10-13/mo |
+| Recall | Yes | Partial | No | No | No | No | $7-10/mo |
+| Fabric (29K stars) | DIY | Manual CLI | No | No | No | No | Free (BYOK) |
+| Obsidian Web Clipper | No | No | Yes | No | No | No | Free |
+| Karakeep (Hoarder) | Tags only | No | No | No | No | No | Free (self-host) |
+| **2Vault** | **Yes** | **Yes** | **Yes** | **Yes** | **Yes (DOM)** | **Yes** | **Free + $12-15/mo** |
 
 ### Market Context
 

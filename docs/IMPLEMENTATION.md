@@ -39,6 +39,17 @@
     - e2e-testing-patterns (skill): Full extension E2E tests
     - product-manager-toolkit (skill): Chrome Web Store listing, screenshots
     - pr-review-toolkit:review-pr (skill): Final review before release
+  Sprint 2.5 Core Intelligence:
+    - backend-developer (agent): VaultClient methods, orchestrator logic, LLM prompt engineering
+    - typescript-pro (agent): Type definitions (TagGroup, VaultOrganization, ProcessingResult extension)
+    - expert-react-frontend-engineer (agent): Settings UI (PARA selector, TagGroupEditor)
+    - cofounder (agent): PARA strategy validation, product direction
+    - product-manager (agent): Tag group strategy, user story refinement
+    - project-manager (agent): Risk assessment, dependency ordering
+  Sprint 2.6 UX Polish:
+    - expert-react-frontend-engineer (agent): ResultsSummary, BookmarkBrowser, Settings UI
+    - typescript-pro (agent): Validation logic types
+    - product-manager (agent): UX review of failed results UI
 
   Cross-cutting (use throughout):
     - pr-review-toolkit:code-reviewer (agent): After writing code
@@ -330,6 +341,153 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 - [x] All URLs failed -> "Something went wrong" with retry + troubleshooting
 - [x] Extension update handling (preserve settings across updates)
 
+### Sprint 2.5: Core Intelligence [TODO]
+
+**Goal:** Add duplicate detection, PARA organization, tag groups, tag consistency, and graph linkage to make vault categorization significantly smarter.
+
+**Dependencies:** Sprint 2.5.4 depends on 2.5.3. Sprint 2.5.5 depends on 2.5.3 and 2.5.4.
+
+#### 2.5.1 Duplicate URL Detection
+
+**Goal:** Search vault before processing each URL. Skip if a note with the same source URL already exists.
+
+- [ ] Add `searchNotes(query: string): Promise<SearchResult[]>` to `VaultClient` using `POST /search/simple/`
+- [ ] Add `readNote(path: string): Promise<string>` to `VaultClient` using `GET /vault/{path}`
+- [ ] Extend `ProcessingResult` with `"skipped"` status and `skipReason` field
+- [ ] Add duplicate check in orchestrator between vault context build and content extraction
+- [ ] Parse frontmatter `source:` field from search results to confirm match
+- [ ] Update `ResultsSummary` to show skipped count with distinct badge
+- [ ] Update `ProcessingStatus` to show "Skipped (duplicate)" per-URL status
+- [ ] Add unit tests for duplicate detection logic in orchestrator
+- [ ] Add unit tests for new VaultClient methods
+
+#### 2.5.2 PARA Organization System
+
+**Goal:** Offer PARA (Projects, Areas, Resources, Archive) as the default folder organization system for new users, with a Custom option for existing vault structures.
+
+- [ ] Add `VaultOrganization` type: `"para" | "custom"` to `Config` in `types.ts`
+- [ ] Define `PARA_FOLDERS` constant: `["Projects/", "Areas/", "Resources/", "Archive/"]` in `config.ts`
+- [ ] Add `vaultOrganization` to `chrome.storage.sync` schema in `storage.ts`
+- [ ] Add organization mode selector (radio group) in `Settings.tsx`
+- [ ] Show PARA folder descriptions when PARA mode is selected
+- [ ] Modify `buildCategorizationPrompt()` in `llm-shared.ts`: if PARA mode, inject PARA-aware instructions
+- [ ] LLM picks PARA bucket + topic subfolder (e.g., `Resources/AI/`, `Areas/Health/`)
+- [ ] Two-level depth: PARA bucket is level 1, topic subfolder is level 2
+- [ ] Auto-create PARA root folders in vault on first use if they don't exist (via `POST /vault/{path}`)
+- [ ] Default to PARA for new installations, Custom for existing users with vault data
+- [ ] Add unit tests for PARA-aware prompt building
+- [ ] Add unit tests for PARA folder creation logic
+
+#### 2.5.3 User-Defined Tag Groups in Settings
+
+**Goal:** Let users define tag groups (e.g., "Tech: typescript, react, python") in Settings so the LLM uses consistent tags.
+
+- [ ] Define `TagGroup` interface in `types.ts`: `{ name: string; tags: string[] }`
+- [ ] Extend `Config` with `tagGroups: TagGroup[]`
+- [ ] Add `tagGroups` to `chrome.storage.sync` schema in `storage.ts`
+- [ ] Build `TagGroupEditor` component in `src/popup/components/TagGroupEditor.tsx`
+  - Add/remove tag groups
+  - Add/remove tags within a group
+  - Inline editing with tag chips
+- [ ] Integrate `TagGroupEditor` into `Settings.tsx`
+- [ ] Add unit tests for TagGroupEditor component
+- [ ] Add unit tests for tag group storage serialization
+
+#### 2.5.4 Tag Consistency Rules for LLM
+
+**Goal:** Make the LLM prioritize user-defined tag groups when assigning tags, complementing PARA organization.
+
+**Depends on:** 2.5.3
+
+- [ ] Extend `VaultContext` with `tagGroups: TagGroup[]` field
+- [ ] Modify `buildCategorizationPrompt()` in `llm-shared.ts` to inject tag groups prominently
+- [ ] Prompt instructs LLM: "Prefer tags from these user-defined groups. Only create new tags if no group fits."
+- [ ] Pass `tagGroups` from `Config` into `VaultContext` in orchestrator
+- [ ] Validate LLM output tags against user groups (warn if inventing new tags)
+- [ ] Add unit tests for tag group prompt injection
+- [ ] Add integration test: tag groups influence LLM categorization output
+
+#### 2.5.5 Graph Linkage via Tag Hub Notes
+
+**Goal:** Create wiki-links in notes and auto-manage tag hub notes for Obsidian graph view connectivity.
+
+**Depends on:** 2.5.3, 2.5.4
+
+- [ ] Add `appendToNote(path: string, content: string): Promise<void>` to `VaultClient` using `PATCH /vault/{path}`
+- [ ] Add `noteExists(path: string): Promise<boolean>` to `VaultClient`
+- [ ] Add `## Related Tags` section to note templates with `[[tag]]` wiki-links
+- [ ] Create `formatTagHubNote(tag: string, linkedNotes: string[]): string` template in `note-formatter.ts`
+- [ ] Hub note format: YAML frontmatter + list of `[[linked-note]]` wiki-links
+- [ ] Auto-create hub notes in orchestrator post-processing step (after note creation)
+- [ ] If hub note exists, append new `[[note]]` link instead of recreating
+- [ ] Hub notes stored in configurable location (default: `Tags/` folder)
+- [ ] Non-critical: if hub note creation fails, log warning and continue (main note already saved)
+- [ ] Add unit tests for hub note formatting
+- [ ] Add unit tests for append-vs-create logic
+- [ ] Add integration test for full pipeline with hub note creation
+
+### Sprint 2.6: UX Polish [TODO]
+
+**Goal:** Improve error visibility, add direct URL input, and validate settings inputs.
+
+#### 2.6.1 Better Failed Results UI
+
+**Goal:** Categorize errors, show actionable suggestions, and make failure details easy to explore.
+
+- [ ] Add `errorCategory` field to `ProcessingResult`: `"network" | "extraction" | "llm" | "vault" | "unknown"`
+- [ ] Set `errorCategory` in orchestrator catch blocks based on error source
+- [ ] Define error suggestion map: category -> user-facing help text (e.g., network -> "Check your internet connection")
+- [ ] Redesign `ResultsSummary` with:
+  - Error category badge per failed URL
+  - Expandable error details row
+  - Copy URL button for failed items
+  - Actionable suggestion text per category
+- [ ] Add "Retry Failed" button that re-processes only failed URLs
+- [ ] Add unit tests for error categorization logic
+- [ ] Add component tests for new ResultsSummary layout
+
+#### 2.6.2 Direct URL Input
+
+**Goal:** Let users paste URLs directly without bookmarking first.
+
+- [ ] Add URL textarea + "Process URLs" button above bookmark tree in `BookmarkBrowser.tsx`
+- [ ] URL parsing logic: split by newlines, trim whitespace, validate with `new URL()`, deduplicate
+- [ ] Show valid URL count below textarea
+- [ ] Disable "Process URLs" button when no valid URLs
+- [ ] Feed parsed URLs into existing processing pipeline (same as bookmark batch)
+- [ ] Add unit tests for URL parsing and validation logic
+- [ ] Add component tests for textarea integration
+
+#### 2.6.3 API Key Format Validation
+
+**Goal:** Validate API key format inline in Settings before save.
+
+- [ ] Create `validateOpenRouterKey(key: string): ValidationResult` in `src/utils/validation.ts`
+  - Must start with `sk-or-`
+  - Minimum length check (>20 chars)
+- [ ] Create `validateVaultApiKey(key: string): ValidationResult` in `src/utils/validation.ts`
+  - Non-empty, minimum length check
+- [ ] `ValidationResult` type: `{ valid: boolean; error?: string }`
+- [ ] Add inline validation error messages in `Settings.tsx` below each input
+- [ ] Disable Save button when any validation fails
+- [ ] Validate on blur and on input change (debounced)
+- [ ] Add unit tests for validation functions
+- [ ] Add component tests for inline error display
+
+#### 2.6.4 Obsidian URL Dropdown
+
+**Goal:** Replace the vault URL text input with a preset dropdown for common configurations.
+
+- [ ] Define `VAULT_URL_PRESETS` constant in `config.ts`:
+  - `{ label: "HTTP (localhost:27123)", value: "http://localhost:27123" }`
+  - `{ label: "HTTPS (localhost:27124)", value: "https://localhost:27124" }`
+  - `{ label: "Custom...", value: "custom" }`
+- [ ] Replace vault URL text input with dropdown in `Settings.tsx`
+- [ ] Show custom text input when "Custom..." is selected
+- [ ] Default selection: `https://localhost:27124` (current default)
+- [ ] Preserve backward compatibility: if stored URL doesn't match a preset, select "Custom..."
+- [ ] Add component tests for dropdown + custom input behavior
+
 ---
 
 ## Phase 3: Managed Tier + Growth (Future) [DEFERRED]
@@ -355,11 +513,11 @@ Only after Phase 2 is live and has 100+ installs.
 - [~] OpenRouter integration (multi-model BYOK)
 - [~] Provider comparison in settings (cost/quality tradeoffs)
 
-### 3.3 Duplicate Detection [DEFERRED]
+### 3.3 Duplicate Detection [MOVED to Sprint 2.5.1]
 
-- [~] Check vault for existing note with same source URL before creating
-- [~] Show "Already saved" indicator in bookmark browser
-- [~] Option to re-process (overwrite or create new version)
+- [~] ~~Check vault for existing note with same source URL before creating~~ -> Sprint 2.5.1
+- [~] Show "Already saved" indicator in bookmark browser (future enhancement)
+- [~] Option to re-process (overwrite or create new version) (future enhancement)
 
 ### 3.4 Facebook + Instagram Extractors [DEFERRED]
 

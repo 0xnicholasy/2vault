@@ -35,18 +35,18 @@ The project has two layers:
 
 ### Core Processing Module (`src/core/`)
 
-Platform-independent logic. No Chrome APIs. Can be tested standalone.
+Platform-independent logic. No Chrome APIs. Can be tested standalone. Supports PARA organization system and user-defined tag groups for vault-aware categorization.
 
 ```
 src/core/
-├── types.ts           # All shared TypeScript interfaces
+├── types.ts           # All shared TypeScript interfaces (incl. TagGroup, VaultOrganization)
 ├── extractor.ts       # HTML -> clean markdown (Readability + Turndown)
-├── vault-client.ts    # Obsidian Local REST API HTTP client
-├── vault-analyzer.ts  # Reads vault structure, builds LLM context
-├── llm-shared.ts      # Shared LLM prompt building and validation logic
+├── vault-client.ts    # Obsidian Local REST API HTTP client (incl. search, append)
+├── vault-analyzer.ts  # Reads vault structure, builds LLM context (PARA-aware)
+├── llm-shared.ts      # Shared LLM prompt building and validation logic (tag group injection)
 ├── openrouter-provider.ts  # OpenRouter LLM provider (default)
-├── note-formatter.ts  # ProcessedNote -> markdown string + YAML frontmatter
-└── orchestrator.ts    # Main pipeline: URLs -> extract -> analyze -> process -> create
+├── note-formatter.ts  # ProcessedNote -> markdown string + YAML frontmatter + wiki-links
+└── orchestrator.ts    # Main pipeline: URLs -> dedupe -> extract -> analyze -> process -> create -> hub notes
 ```
 
 ### Extension Layer (`src/popup/`, `src/background/`, `src/content-scripts/`)
@@ -76,22 +76,26 @@ src/utils/             # chrome.storage wrapper, config management
 See `src/core/types.ts` for full definitions. Key interfaces:
 
 - **`ExtractedContent`**: Output of content extraction (URL, title, markdown content, author, platform)
-- **`VaultContext`**: Vault folder structure + tag taxonomy for categorization decisions
+- **`VaultContext`**: Vault folder structure + tag taxonomy + tag groups + organization mode for categorization
 - **`ProcessedNote`**: LLM output (summary, key takeaways, suggested folder, suggested tags)
 - **`LLMProvider`**: Abstracted provider interface (`processContent(content, vaultContext) -> ProcessedNote`)
-- **`Config`**: Extension settings (API key, vault URL, default folder, LLM provider)
+- **`Config`**: Extension settings (API key, vault URL, default folder, LLM provider, vault organization, tag groups)
+- **`TagGroup`**: User-defined tag group (`{ name: string; tags: string[] }`)
+- **`VaultOrganization`**: `"para" | "custom"` -- vault folder organization mode
 
 ## Processing Pipeline
 
 ```
-URLs -> [Extract Content] -> [Analyze Vault] -> [LLM Process] -> [Format Note] -> [Create in Vault]
+URLs -> [Duplicate Check] -> [Extract Content] -> [Analyze Vault] -> [LLM Process] -> [Format Note] -> [Create in Vault] -> [Hub Notes]
 ```
 
-1. **Extract**: Readability + Turndown for articles. DOM content scripts for X/LinkedIn.
-2. **Analyze**: Read vault folders (top 2 levels, max 50) + tags (max 100) via REST API. Cache 1 hour.
-3. **Process**: LLM summarizes content + picks best-fit folder and tags from vault context.
-4. **Format**: Markdown with YAML frontmatter (source, author, dates, tags, type, status).
-5. **Create**: POST to Obsidian vault via Local REST API.
+1. **Dedupe**: Search vault for existing notes with same source URL. Skip duplicates.
+2. **Extract**: Readability + Turndown for articles. DOM content scripts for X/LinkedIn.
+3. **Analyze**: Read vault folders + tags + user tag groups via REST API. PARA-aware context. Cache 1 hour.
+4. **Process**: LLM summarizes content + picks best-fit folder and tags (using tag groups + PARA rules).
+5. **Format**: Markdown with YAML frontmatter (source, author, dates, tags, type, status) + wiki-links.
+6. **Create**: POST to Obsidian vault via Local REST API.
+7. **Hub Notes**: Create/append tag hub notes with `[[note]]` wiki-links for graph connectivity.
 
 ## Content Extraction Patterns
 
@@ -132,9 +136,10 @@ import TurndownService from 'turndown';
 
 Key endpoints:
 - `GET /vault/` - list files/folders
-- `POST /vault/{path}` - create note
+- `POST /vault/{path}` - create note (also PARA folder creation)
 - `GET /vault/{path}` - read note
-- `PATCH /vault/{path}` - append to note
+- `PATCH /vault/{path}` - append to note (used for hub note updates)
+- `POST /search/simple/` - search vault for duplicate source URLs
 
 ### Note Templates
 
@@ -207,6 +212,8 @@ Extension -> HTTPS -> 2vault-proxy.vercel.app -> openrouter.ai/api
   vaultApiKey: string;         // Obsidian REST API key
   defaultFolder: string;       // Fallback folder for uncategorized notes
   keyboardShortcut: string;    // Display only (actual shortcut in manifest)
+  vaultOrganization: 'para' | 'custom';  // Vault organization mode (default: 'para')
+  tagGroups: TagGroup[];       // User-defined tag groups for consistent categorization
 }
 
 // chrome.storage.local (device-local, 10MB limit)
@@ -276,6 +283,8 @@ Progress is tracked in `docs/IMPLEMENTATION.md` using this legend:
 **Status:**
 - **Phase 1 (Core Module):** Sprints 1.1-1.4 [x] DONE. API frozen.
 - **Phase 2 (Extension):** Sprints 2.1-2.4 [x] DONE.
+- **Phase 2.5 (Core Intelligence):** [ ] TODO. Duplicate detection, PARA organization, tag groups, tag consistency, graph linkage.
+- **Phase 2.6 (UX Polish):** [ ] TODO. Better error UI, direct URL input, API key validation, vault URL dropdown.
 - **Phase 3 (Managed Tier):** [~] DEFERRED (only after Phase 2 live with 100+ installs).
 
 ## Phase Boundaries
@@ -286,15 +295,22 @@ Build and test `src/core/` only. No extension code yet. Validate with standalone
 
 **Done when:** 20+ URLs processed, >80% categorized correctly, notes appear in Obsidian.
 
-### Phase 2 (Week 2-3): Extension - NEXT
+### Phase 2 (Week 2-3): Extension - Sprints 2.1-2.4 DONE
 
 Wire core module into Chrome extension. Build popup UI, content scripts, service worker.
 
 **Done when:** Extension installed from `dist/`, bookmark folder batch processing works, X/LinkedIn capture works, settings page functional.
 
+### Phase 2.5-2.6: Intelligence + Polish - NEXT
+
+Sprint 2.5: Duplicate detection, PARA organization, tag groups, tag consistency, graph linkage via hub notes.
+Sprint 2.6: Better error UI, direct URL input, API key validation, vault URL dropdown.
+
+**Done when:** PARA organization works, duplicates are skipped, tag hub notes appear in graph view, URLs can be pasted directly.
+
 ### Phase 3 (Future): Managed Tier
 
-Serverless proxy, Stripe, additional LLM providers, duplicate detection, Facebook/Instagram.
+Serverless proxy, Stripe, additional LLM providers, Facebook/Instagram.
 
 **Only start after:** Phase 2 live with 100+ Chrome Web Store installs.
 
