@@ -1,4 +1,4 @@
-import type { Config, LLMProvider, ProcessingResult } from "@/core/types.ts";
+import type { Config, ExtractedContent, LLMProvider, ProcessingResult } from "@/core/types.ts";
 import { VaultClient } from "@/core/vault-client";
 import { OpenRouterProvider } from "@/core/openrouter-provider";
 import { buildVaultContext } from "@/core/vault-analyzer";
@@ -16,13 +16,17 @@ export function createDefaultProvider(config: Config): LLMProvider {
   return new OpenRouterProvider(config.apiKey);
 }
 
+export type ExtractFn = (url: string) => Promise<ExtractedContent>;
+
 export async function processUrls(
   urls: string[],
   config: Config,
   provider: LLMProvider,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  extractFn?: ExtractFn
 ): Promise<ProcessingResult[]> {
   const client = new VaultClient(config.vaultUrl, config.vaultApiKey);
+  const extract = extractFn ?? fetchAndExtract;
 
   // Build vault context once - failure here aborts entire batch
   const vaultContext = await buildVaultContext(client);
@@ -36,7 +40,7 @@ export async function processUrls(
     try {
       // Extract content
       onProgress?.(url, "extracting", i, total);
-      const extracted = await fetchAndExtract(url);
+      const extracted = await extract(url);
 
       if (extracted.status === "failed") {
         results.push({

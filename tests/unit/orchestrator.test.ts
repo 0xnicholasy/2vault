@@ -41,7 +41,7 @@ vi.mock("@/core/note-formatter", () => ({
   generateFilename: mockGenerateFilename,
 }));
 
-import { processUrls, type ProgressCallback } from "@/core/orchestrator";
+import { processUrls, type ProgressCallback, type ExtractFn } from "@/core/orchestrator";
 
 const TEST_CONFIG: Config = {
   apiKey: "test-api-key",
@@ -330,5 +330,88 @@ describe("processUrls - note path", () => {
       "Reading/Articles/my-article.md",
       "# Formatted Note"
     );
+  });
+});
+
+// -- Custom extractFn ---------------------------------------------------------
+
+describe("processUrls - custom extractFn", () => {
+  it("uses custom extractFn instead of fetchAndExtract", async () => {
+    const customExtract: ExtractFn = vi.fn().mockResolvedValue(
+      createExtracted({
+        url: "https://x.com/user/status/123",
+        type: "social-media",
+        platform: "x",
+        content: "Tweet content from DOM",
+      })
+    );
+
+    const results = await processUrls(
+      ["https://x.com/user/status/123"],
+      TEST_CONFIG,
+      createMockProvider(),
+      undefined,
+      customExtract
+    );
+
+    expect(customExtract).toHaveBeenCalledWith("https://x.com/user/status/123");
+    expect(mockFetchAndExtract).not.toHaveBeenCalled();
+    expect(results).toHaveLength(1);
+    expect(results[0]!.status).toBe("success");
+  });
+
+  it("falls back to fetchAndExtract when extractFn is not provided", async () => {
+    await processUrls(
+      ["https://example.com/article"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(mockFetchAndExtract).toHaveBeenCalledWith("https://example.com/article");
+  });
+
+  it("handles extractFn failure gracefully", async () => {
+    const failingExtract: ExtractFn = vi.fn().mockResolvedValue(
+      createExtracted({
+        url: "https://x.com/user/status/456",
+        status: "failed",
+        error: "DOM extraction timed out",
+      })
+    );
+
+    const results = await processUrls(
+      ["https://x.com/user/status/456"],
+      TEST_CONFIG,
+      createMockProvider(),
+      undefined,
+      failingExtract
+    );
+
+    expect(results[0]!.status).toBe("failed");
+    expect(results[0]!.error).toBe("DOM extraction timed out");
+  });
+
+  it("processes mixed URLs with custom extractFn", async () => {
+    const urls = ["https://x.com/user/status/1", "https://example.com/article"];
+    const customExtract: ExtractFn = vi.fn()
+      .mockResolvedValueOnce(
+        createExtracted({ url: urls[0], type: "social-media", platform: "x" })
+      )
+      .mockResolvedValueOnce(
+        createExtracted({ url: urls[1] })
+      );
+
+    const results = await processUrls(
+      urls,
+      TEST_CONFIG,
+      createMockProvider(),
+      undefined,
+      customExtract
+    );
+
+    expect(results).toHaveLength(2);
+    expect(results[0]!.status).toBe("success");
+    expect(results[1]!.status).toBe("success");
+    expect(customExtract).toHaveBeenCalledTimes(2);
   });
 });

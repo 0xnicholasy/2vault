@@ -250,22 +250,22 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 - [x] Process immediately (single URL, no batch UI needed)
 - [x] Show browser notification on completion: "Saved to [folder] in Obsidian"
 
-### Sprint 2.3: Social Media Content Scripts (Day 4-6) [TODO]
+### Sprint 2.3: Social Media Content Scripts (Day 4-6) [DONE]
 
 #### 2.3.1 X/Twitter extractor
 
 **File:** `src/content-scripts/twitter-extractor.ts`
 
-- [ ] Content script matches: `https://x.com/*`, `https://twitter.com/*`
-- [ ] Extract from DOM:
+- [x] Content script matches: `https://x.com/*`, `https://twitter.com/*`
+- [x] Extract from DOM:
   - Post text: `article[data-testid="tweet"]` inner text
   - Author name + handle: `[data-testid="User-Name"]`
   - Timestamp: `time[datetime]` attribute
   - Thread detection: check for multiple tweets in conversation
   - Quote tweets: nested tweet content
   - Media: image alt text, video placeholder text
-- [ ] Return `ExtractedContent` with `type: 'social-media'`, `platform: 'x'`
-- [ ] Handle edge cases:
+- [x] Return `ExtractedContent` with `type: 'social-media'`, `platform: 'x'`
+- [x] Handle edge cases:
   - Long threads (collect all posts in thread)
   - Quote tweets with context
   - Posts with only images (extract alt text + "Image post" label)
@@ -274,27 +274,27 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 
 **File:** `src/content-scripts/linkedin-extractor.ts`
 
-- [ ] Content script matches: `https://www.linkedin.com/*`
-- [ ] Extract from DOM:
+- [x] Content script matches: `https://www.linkedin.com/*`
+- [x] Extract from DOM:
   - Post text: `.feed-shared-update-v2__description` or similar selector
   - Author: `.feed-shared-actor__name`
   - Date: `.feed-shared-actor__sub-description` or `time` element
   - Article link (if shared article): `.feed-shared-article` href
-- [ ] Return `ExtractedContent` with `type: 'social-media'`, `platform: 'linkedin'`
-- [ ] Handle: "See more" truncated posts (click expand first)
-- [ ] Handle: LinkedIn articles (different from posts)
+- [x] Return `ExtractedContent` with `type: 'social-media'`, `platform: 'linkedin'`
+- [x] Handle: "See more" truncated posts (click expand first)
+- [x] Handle: LinkedIn articles (different from posts)
 
 #### 2.3.3 Batch social media via tab opening
 
-- [ ] For bookmarked X/LinkedIn URLs in batch mode:
+- [x] For bookmarked X/LinkedIn URLs in batch mode:
   1. Open URL in background tab
   2. Wait for page load
   3. Inject content script to extract
   4. Close tab
   5. Return extracted content
-- [ ] Rate limit: max 2 concurrent background tabs
-- [ ] Timeout: 15s per URL (close tab on timeout)
-- [ ] User notification: "2Vault is processing your bookmarks (opening tabs briefly)"
+- [x] Rate limit: max 2 concurrent background tabs
+- [x] Timeout: 15s per URL (close tab on timeout)
+- [~] User notification: "2Vault is processing your bookmarks (opening tabs briefly)"
 
 ### Sprint 2.4: Polish + Extension Store Prep (Day 6-8) [TODO]
 

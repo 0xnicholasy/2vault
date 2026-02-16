@@ -1,6 +1,7 @@
-import type { ProcessingState, UrlStatus } from "@/background/messages.ts";
-import type { ProcessingResult } from "@/core/types.ts";
+import type { ProcessingState, UrlStatus, ExtractionResultMessage } from "@/background/messages.ts";
+import type { ExtractedContent, ProcessingResult } from "@/core/types.ts";
 import { processUrls, createDefaultProvider } from "@/core/orchestrator";
+import { fetchAndExtract, createFailedExtraction } from "@/core/extractor";
 import {
   getConfig,
   getProcessingState,
@@ -11,6 +12,120 @@ import {
 import { MAX_HISTORY } from "@/utils/config";
 
 let cancelRequested = false;
+
+// -- Social media URL detection -----------------------------------------------
+
+const SOCIAL_MEDIA_PATTERNS = [
+  /^https?:\/\/(www\.)?x\.com\//,
+  /^https?:\/\/(www\.)?twitter\.com\//,
+  /^https?:\/\/(www\.)?linkedin\.com\//,
+];
+
+export function isSocialMediaUrl(url: string): boolean {
+  return SOCIAL_MEDIA_PATTERNS.some((pattern) => pattern.test(url));
+}
+
+// -- Tab-based DOM extraction -------------------------------------------------
+
+const DOM_EXTRACT_TIMEOUT_MS = 15_000;
+const MAX_CONCURRENT_TABS = 2;
+
+let activeTabExtractions = 0;
+
+async function waitForTabSlot(): Promise<void> {
+  while (activeTabExtractions >= MAX_CONCURRENT_TABS) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+}
+
+export async function extractViaDom(url: string): Promise<ExtractedContent> {
+  await waitForTabSlot();
+  activeTabExtractions++;
+
+  let tabId: number | undefined;
+
+  try {
+    const tab = await chrome.tabs.create({ url, active: false });
+    tabId = tab.id;
+
+    if (tabId === undefined) {
+      return createFailedExtraction(url, "Failed to create tab");
+    }
+
+    // Wait for tab to finish loading
+    await waitForTabLoad(tabId);
+
+    // Request extraction from content script
+    const response = await Promise.race([
+      chrome.tabs.sendMessage(tabId, { type: "EXTRACT_CONTENT" }) as Promise<ExtractionResultMessage>,
+      rejectAfterTimeout(DOM_EXTRACT_TIMEOUT_MS),
+    ]);
+
+    return response.data;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "DOM extraction failed";
+    return createFailedExtraction(url, message);
+  } finally {
+    activeTabExtractions--;
+    if (tabId !== undefined) {
+      chrome.tabs.remove(tabId).catch(() => {
+        // Tab may already be closed
+      });
+    }
+  }
+}
+
+function waitForTabLoad(tabId: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error("Tab load timed out"));
+    }, DOM_EXTRACT_TIMEOUT_MS);
+
+    const listener = (
+      updatedTabId: number,
+      changeInfo: chrome.tabs.OnUpdatedInfo
+    ) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") {
+        clearTimeout(timeout);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+function rejectAfterTimeout(ms: number): Promise<never> {
+  return new Promise((_resolve, reject) => {
+    setTimeout(() => reject(new Error("DOM extraction timed out")), ms);
+  });
+}
+
+// -- Smart extraction routing -------------------------------------------------
+
+export async function smartExtract(url: string): Promise<ExtractedContent> {
+  if (isSocialMediaUrl(url)) {
+    return extractViaDom(url);
+  }
+  return fetchAndExtract(url);
+}
+
+async function extractFromActiveTab(tabId: number, url: string): Promise<ExtractedContent> {
+  try {
+    const response = await Promise.race([
+      chrome.tabs.sendMessage(tabId, { type: "EXTRACT_CONTENT" }) as Promise<ExtractionResultMessage>,
+      rejectAfterTimeout(DOM_EXTRACT_TIMEOUT_MS),
+    ]);
+    return response.data;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Active tab extraction failed";
+    return createFailedExtraction(url, message);
+  }
+}
+
+// -- Batch processing ---------------------------------------------------------
 
 function createInitialState(urls: string[]): ProcessingState {
   return {
@@ -53,7 +168,13 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
   };
 
   try {
-    const allResults = await processUrls(urls, config, provider, onProgress);
+    const allResults = await processUrls(
+      urls,
+      config,
+      provider,
+      onProgress,
+      smartExtract
+    );
     results.push(...allResults);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Processing failed";
@@ -77,7 +198,10 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
   await setLocalStorage("processingHistory", updated);
 }
 
-async function handleSingleUrlCapture(url: string): Promise<void> {
+async function handleSingleUrlCapture(
+  url: string,
+  activeTabId?: number
+): Promise<void> {
   const config = await getConfig();
   if (!config.apiKey || !config.vaultApiKey) {
     console.warn("[2Vault] Missing API keys - configure in extension settings");
@@ -85,7 +209,16 @@ async function handleSingleUrlCapture(url: string): Promise<void> {
   }
 
   const provider = createDefaultProvider(config);
-  const results = await processUrls([url], config, provider);
+
+  // For social media on active tab, extract directly without opening a new tab
+  let extractFn: ((u: string) => Promise<ExtractedContent>) | undefined;
+  if (isSocialMediaUrl(url) && activeTabId !== undefined) {
+    extractFn = (_u: string) => extractFromActiveTab(activeTabId, url);
+  } else {
+    extractFn = smartExtract;
+  }
+
+  const results = await processUrls([url], config, provider, undefined, extractFn);
   const result = results[0];
 
   if (result?.status === "success") {
@@ -116,12 +249,13 @@ async function handleSingleUrlCapture(url: string): Promise<void> {
 chrome.commands.onCommand.addListener((command) => {
   if (command === "capture-current-page") {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const url = tabs[0]?.url;
+      const tab = tabs[0];
+      const url = tab?.url;
       if (!url || url.startsWith("chrome://")) {
         console.warn("[2Vault] Cannot capture this page");
         return;
       }
-      handleSingleUrlCapture(url).catch((err) => {
+      handleSingleUrlCapture(url, tab?.id).catch((err) => {
         console.error("[2Vault] Capture failed:", err);
       });
     });
@@ -155,10 +289,6 @@ chrome.runtime.onMessage.addListener(
         sendResponse({ type: "PROCESSING_CANCELLED" });
       });
       return true;
-    }
-
-    if (message.type === "EXTRACTED_CONTENT") {
-      console.log("[2Vault] Received extracted content", message);
     }
 
     return false;
