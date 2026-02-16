@@ -93,9 +93,45 @@ export function formatNote(
     lines.push("");
   }
 
+  // Related tags section with wiki-links for graph connectivity
+  if (processed.suggestedTags.length > 0) {
+    lines.push("## Related Tags");
+    lines.push("");
+    for (const tag of processed.suggestedTags) {
+      lines.push(`- [[${tag}]]`);
+    }
+    lines.push("");
+  }
+
   lines.push("## Source");
   lines.push("");
   lines.push(`[${processed.title}](${processed.source.url})`);
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+export function formatTagHubNote(
+  tag: string,
+  linkedNotes: string[],
+  dateUpdated?: Date
+): string {
+  const updated = formatDate(dateUpdated ?? new Date());
+  const lines: string[] = [];
+
+  lines.push("---");
+  lines.push("type: hub");
+  lines.push(`tag: ${escapeYamlValue(tag)}`);
+  lines.push(`date_updated: ${updated}`);
+  lines.push("---");
+  lines.push("");
+  lines.push(`# ${tag}`);
+  lines.push("");
+  lines.push("## Linked Notes");
+  lines.push("");
+  for (const note of linkedNotes) {
+    lines.push(`- [[${note}]]`);
+  }
   lines.push("");
 
   return lines.join("\n");

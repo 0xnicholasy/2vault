@@ -266,7 +266,7 @@ export class OpenRouterProvider implements LLMProvider {
 
     try {
       const input = extractToolCallResult(response, "categorize_content");
-      return validateCategorizationResult(input, vaultContext.folders);
+      return validateCategorizationResult(input, vaultContext.folders, vaultContext.tagGroups);
     } catch (err) {
       throw new LLMProcessingError(
         `Categorization result invalid: ${err instanceof Error ? err.message : "Unknown error"}`,

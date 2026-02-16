@@ -45,7 +45,7 @@ export function buildCategorizationPrompt(
         .join("\n")
     : "(no existing notes)";
 
-  return [
+  const parts: string[] = [
     "Categorize this content into the user's Obsidian vault.",
     "",
     `Title: ${summarized.title}`,
@@ -53,18 +53,53 @@ export function buildCategorizationPrompt(
     `Type: ${content.type} (${content.platform})`,
     `URL: ${content.url}`,
     "",
+  ];
+
+  // PARA organization instructions
+  if (vaultContext.organization === "para") {
+    parts.push(
+      "This vault uses the PARA organization system. Categorize into one of these top-level folders:",
+      "  - Projects: Short-term efforts with a clear goal and deadline",
+      "  - Areas: Ongoing responsibilities you manage over time",
+      "  - Resources: Topics or interests you want to reference later",
+      "  - Archive: Inactive items from the other three categories",
+      "",
+      "Choose the PARA bucket (level 1) and a topic subfolder (level 2), e.g., Resources/AI or Areas/Health.",
+      ""
+    );
+  }
+
+  parts.push(
     "Available folders:",
     folderList,
     "",
     "Existing tags:",
     tagList,
-    "",
+    ""
+  );
+
+  // Tag groups
+  if (vaultContext.tagGroups.length > 0) {
+    parts.push("User-defined tag groups (prefer tags from these groups):");
+    for (const group of vaultContext.tagGroups) {
+      parts.push(`  ${group.name}: ${group.tags.join(", ")}`);
+    }
+    parts.push(
+      "",
+      "Prefer tags from the above user-defined groups. Only create new tags if no group fits."
+    );
+    parts.push("");
+  }
+
+  parts.push(
     "Example notes in vault:",
     noteExamples,
     "",
     "Choose the best existing folder for this content. Suggest tags that are relevant,",
-    "preferring existing tags when they fit. You may suggest new tags if needed.",
-  ].join("\n");
+    "preferring existing tags when they fit. You may suggest new tags if needed."
+  );
+
+  return parts.join("\n");
 }
 
 export function validateSummarizationResult(
@@ -103,7 +138,8 @@ export function validateSummarizationResult(
 
 export function validateCategorizationResult(
   input: unknown,
-  folders: string[]
+  folders: string[],
+  tagGroups?: Array<{ name: string; tags: string[] }>
 ): CategorizationResult {
   if (
     typeof input !== "object" ||
@@ -137,8 +173,21 @@ export function validateCategorizationResult(
     suggestedFolder = folders[0]!;
   }
 
+  const suggestedTags = obj.suggestedTags as string[];
+
+  // Warn about tags not in any user-defined group (observability)
+  if (tagGroups && tagGroups.length > 0) {
+    const allGroupTags = new Set(tagGroups.flatMap((g) => g.tags));
+    const inventedTags = suggestedTags.filter((t) => !allGroupTags.has(t));
+    if (inventedTags.length > 0) {
+      console.warn(
+        `LLM suggested tags not in any group: ${inventedTags.join(", ")}`
+      );
+    }
+  }
+
   return {
     suggestedFolder,
-    suggestedTags: obj.suggestedTags as string[],
+    suggestedTags,
   };
 }

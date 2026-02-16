@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatNote, generateFilename } from "@/core/note-formatter";
+import { formatNote, generateFilename, formatTagHubNote } from "@/core/note-formatter";
 import type { ExtractedContent, ProcessedNote } from "@/core/types";
 
 const FIXED_DATE = new Date("2026-02-16");
@@ -299,5 +299,52 @@ describe("generateFilename", () => {
     expect(generateFilename("Top 10 Tips for 2026")).toBe(
       "top-10-tips-for-2026.md"
     );
+  });
+});
+
+// -- formatNote: Related Tags wiki-links --------------------------------------
+
+describe("formatNote - related tags wiki-links", () => {
+  it("renders Related Tags section with wiki-links", () => {
+    const result = formatNote(createProcessed(), FIXED_DATE);
+
+    expect(result).toContain("## Related Tags");
+    expect(result).toContain("- [[testing]]");
+    expect(result).toContain("- [[development]]");
+  });
+
+  it("omits Related Tags section when no tags", () => {
+    const processed = createProcessed({ suggestedTags: [] });
+    const result = formatNote(processed, FIXED_DATE);
+
+    expect(result).not.toContain("## Related Tags");
+  });
+});
+
+// -- formatTagHubNote ---------------------------------------------------------
+
+describe("formatTagHubNote", () => {
+  it("generates hub note with YAML frontmatter", () => {
+    const result = formatTagHubNote("ai", ["note-1", "note-2"], FIXED_DATE);
+
+    expect(result).toContain("---");
+    expect(result).toContain("type: hub");
+    expect(result).toContain("tag: ai");
+    expect(result).toContain("date_updated: 2026-02-16");
+    expect(result).toContain("---");
+  });
+
+  it("renders wiki-links for each linked note", () => {
+    const result = formatTagHubNote("ai", ["note-1", "note-2"], FIXED_DATE);
+
+    expect(result).toContain("- [[note-1]]");
+    expect(result).toContain("- [[note-2]]");
+  });
+
+  it("includes tag as heading", () => {
+    const result = formatTagHubNote("programming", ["note-1"], FIXED_DATE);
+
+    expect(result).toContain("# programming");
+    expect(result).toContain("## Linked Notes");
   });
 });

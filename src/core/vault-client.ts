@@ -1,5 +1,6 @@
 import type {
   NotePreview,
+  SearchResult,
   VaultHealthResponse,
   VaultListResponse,
 } from "@/core/types";
@@ -86,6 +87,61 @@ export class VaultClient {
 
     // Type assertion justified: we control the REST API contract
     return (await response.json()) as T;
+  }
+
+  private async requestText(
+    method: string,
+    path: string,
+    body?: string,
+    contentType?: string
+  ): Promise<string> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.apiKey}`,
+      Accept: "text/markdown",
+    };
+
+    if (body !== undefined) {
+      headers["Content-Type"] = contentType ?? "text/plain";
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers,
+        body,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new VaultClientError(
+          `Request timed out: ${method} ${path}`,
+          null,
+          path
+        );
+      }
+      const message = err instanceof Error ? err.message : "Unknown error";
+      throw new VaultClientError(
+        `Network error: ${message}`,
+        null,
+        path
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      throw new VaultClientError(
+        `HTTP ${response.status}: ${method} ${path}`,
+        response.status,
+        path
+      );
+    }
+
+    return await response.text();
   }
 
   async testConnection(): Promise<boolean> {
@@ -176,6 +232,85 @@ export class VaultClient {
       title: extractTitle(filePath),
       tags: [],
     }));
+  }
+
+  async searchNotes(query: string): Promise<SearchResult[]> {
+    const raw = await this.requestText(
+      "POST",
+      "/search/simple/",
+      query,
+      "text/plain"
+    );
+
+    // The search endpoint returns JSON despite our text/markdown Accept header
+    // Parse the JSON array of search results
+    try {
+      const parsed = JSON.parse(raw) as Array<{ filename: string; score: number }>;
+      return parsed.map((r) => ({ filename: r.filename, score: r.score }));
+    } catch {
+      return [];
+    }
+  }
+
+  async readNote(path: string): Promise<string> {
+    return this.requestText("GET", `/vault/${encodeVaultPath(path)}`);
+  }
+
+  async noteExists(path: string): Promise<boolean> {
+    try {
+      await this.requestText("GET", `/vault/${encodeVaultPath(path)}`);
+      return true;
+    } catch (err) {
+      if (err instanceof VaultClientError && err.statusCode === 404) {
+        return false;
+      }
+      throw err;
+    }
+  }
+
+  async appendToNote(path: string, content: string): Promise<void> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await fetch(
+        `${this.baseUrl}/vault/${encodeVaultPath(path)}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "text/markdown",
+          },
+          body: content,
+          signal: controller.signal,
+        }
+      );
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new VaultClientError(
+          `Request timed out: PATCH /vault/${path}`,
+          null,
+          `/vault/${path}`
+        );
+      }
+      const message = err instanceof Error ? err.message : "Unknown error";
+      throw new VaultClientError(
+        `Network error: ${message}`,
+        null,
+        `/vault/${path}`
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      throw new VaultClientError(
+        `HTTP ${response.status}: PATCH /vault/${path}`,
+        response.status,
+        `/vault/${path}`
+      );
+    }
   }
 
   async createNote(path: string, content: string): Promise<void> {

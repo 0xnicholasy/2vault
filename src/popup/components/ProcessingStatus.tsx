@@ -16,6 +16,7 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
   const total = state.urls.length;
   const successCount = state.results.filter((r) => r.status === "success").length;
   const failedCount = state.results.filter((r) => r.status === "failed").length;
+  const skippedCount = state.results.filter((r) => r.status === "skipped").length;
   const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
   const isDone = !state.active;
 
@@ -54,7 +55,7 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
           {completed} / {total} URLs
           {isDone && (
             <span className="progress-summary">
-              {" "}- {successCount} saved, {failedCount} failed
+              {" "}- {successCount} saved, {failedCount} failed{skippedCount > 0 ? `, ${skippedCount} skipped` : ""}
             </span>
           )}
         </div>

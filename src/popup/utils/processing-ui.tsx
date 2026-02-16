@@ -1,4 +1,5 @@
 import {
+  IoBanOutline,
   IoCheckmarkCircle,
   IoCloseCircle,
   IoEllipsisHorizontal,
@@ -13,6 +14,8 @@ export function StatusIcon({ status }: { status: UrlStatus }) {
       return <IoCheckmarkCircle className="status-icon status-icon-done" />;
     case "failed":
       return <IoCloseCircle className="status-icon status-icon-failed" />;
+    case "skipped":
+      return <IoBanOutline className="status-icon status-icon-skipped" />;
     case "queued":
       return <IoHourglass className="status-icon status-icon-queued" />;
     default:
@@ -27,7 +30,9 @@ export function getUrlStatus(
 ): UrlStatus {
   const result = state.results.find((r) => r.url === url);
   if (result) {
-    return result.status === "success" ? "done" : "failed";
+    if (result.status === "success") return "done";
+    if (result.status === "skipped") return "skipped";
+    return "failed";
   }
   if (index === state.currentIndex && state.active) {
     return state.currentStatus;

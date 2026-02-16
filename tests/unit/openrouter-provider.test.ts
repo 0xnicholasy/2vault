@@ -49,6 +49,8 @@ const sampleVaultContext: VaultContext = {
     { folder: "Resources/Programming", title: "TypeScript Patterns", tags: ["typescript", "programming"] },
     { folder: "Resources/AI", title: "GPT-4 Architecture", tags: ["ai", "llm"] },
   ],
+  tagGroups: [],
+  organization: "custom",
 };
 
 function mockSummarizationResponse(overrides?: Record<string, unknown>) {

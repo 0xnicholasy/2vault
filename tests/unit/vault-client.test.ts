@@ -455,3 +455,121 @@ describe("VaultClient error handling", () => {
     }
   });
 });
+
+// -- searchNotes --------------------------------------------------------------
+
+describe("VaultClient.searchNotes", () => {
+  it("sends POST with query as text/plain body", async () => {
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify([{ filename: "Inbox/note.md", score: 1.0 }]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    const results = await client.searchNotes("https://example.com/article");
+
+    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/search/simple/");
+    expect(options.method).toBe("POST");
+    expect(options.body).toBe("https://example.com/article");
+    expect(results).toHaveLength(1);
+    expect(results[0]!.filename).toBe("Inbox/note.md");
+  });
+
+  it("returns empty array on invalid JSON response", async () => {
+    mockFetch.mockResolvedValue(
+      new Response("not json", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      })
+    );
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    const results = await client.searchNotes("query");
+
+    expect(results).toEqual([]);
+  });
+});
+
+// -- readNote -----------------------------------------------------------------
+
+describe("VaultClient.readNote", () => {
+  it("returns note content as text", async () => {
+    const noteContent = "---\nsource: https://example.com\n---\n# My Note";
+    mockFetch.mockResolvedValue(
+      new Response(noteContent, { status: 200 })
+    );
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    const content = await client.readNote("Inbox/My Note.md");
+
+    expect(content).toBe(noteContent);
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain("/vault/Inbox/My%20Note.md");
+  });
+
+  it("sends Accept: text/markdown header", async () => {
+    mockFetch.mockResolvedValue(new Response("content", { status: 200 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    await client.readNote("test.md");
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect((options.headers as Record<string, string>).Accept).toBe("text/markdown");
+  });
+});
+
+// -- noteExists ---------------------------------------------------------------
+
+describe("VaultClient.noteExists", () => {
+  it("returns true when note exists (200)", async () => {
+    mockFetch.mockResolvedValue(new Response("content", { status: 200 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    expect(await client.noteExists("Inbox/note.md")).toBe(true);
+  });
+
+  it("returns false when note does not exist (404)", async () => {
+    mockFetch.mockResolvedValue(new Response("Not found", { status: 404 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    expect(await client.noteExists("Inbox/missing.md")).toBe(false);
+  });
+
+  it("throws on other errors", async () => {
+    mockFetch.mockResolvedValue(new Response("Server error", { status: 500 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    await expect(client.noteExists("Inbox/note.md")).rejects.toThrow(VaultClientError);
+  });
+});
+
+// -- appendToNote -------------------------------------------------------------
+
+describe("VaultClient.appendToNote", () => {
+  it("sends PATCH with text/markdown content", async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 200 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    await client.appendToNote("Tags/ai.md", "\n- [[new-note]]");
+
+    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/vault/Tags/ai.md");
+    expect(options.method).toBe("PATCH");
+    expect(options.body).toBe("\n- [[new-note]]");
+    expect(
+      (options.headers as Record<string, string>)["Content-Type"]
+    ).toBe("text/markdown");
+  });
+
+  it("throws VaultClientError on HTTP error", async () => {
+    mockFetch.mockResolvedValue(new Response("Forbidden", { status: 403 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    await expect(
+      client.appendToNote("Tags/ai.md", "content")
+    ).rejects.toThrow(VaultClientError);
+  });
+});

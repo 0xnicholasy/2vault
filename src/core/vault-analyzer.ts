@@ -41,7 +41,7 @@ export async function buildVaultContext(
     )
     .flatMap((r) => r.value);
 
-  const context: VaultContext = { folders, tags, recentNotes };
+  const context: VaultContext = { folders, tags, recentNotes, tagGroups: [], organization: "custom" };
   cachedContext = context;
   cacheTimestamp = now;
 

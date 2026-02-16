@@ -3,11 +3,13 @@ import type { ExtractedContent, ProcessingResult } from "@/core/types.ts";
 /** Per-URL processing status in the batch */
 export type UrlStatus =
   | "queued"
+  | "checking"
   | "extracting"
   | "processing"
   | "creating"
   | "done"
-  | "failed";
+  | "failed"
+  | "skipped";
 
 /** Persisted processing state in chrome.storage.local */
 export interface ProcessingState {

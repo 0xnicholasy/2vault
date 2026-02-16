@@ -107,6 +107,8 @@ describe("getConfig", () => {
       vaultApiKey: "",
       defaultFolder: "Inbox",
       vaultName: "",
+      vaultOrganization: "para",
+      tagGroups: [],
     });
   });
 
