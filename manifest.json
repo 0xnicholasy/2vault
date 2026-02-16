@@ -9,7 +9,8 @@
     "https://twitter.com/*",
     "https://www.linkedin.com/*",
     "http://localhost:*",
-    "https://api.anthropic.com/*"
+    "https://localhost:*",
+    "https://openrouter.ai/*"
   ],
   "action": {
     "default_popup": "src/popup/popup.html",

@@ -189,36 +189,36 @@ Build and validate the AI pipeline independently before wrapping it in an extens
 
 Wrap the validated core module in a Chrome Manifest V3 extension.
 
-### Sprint 2.1: Extension Scaffold (Day 1-2) [TODO]
+### Sprint 2.1: Extension Scaffold (Day 1-2) [DONE]
 
 #### 2.1.1 Project setup
 
 **Repo:** New repo `2vault` (separate from personal-website)
 
-- [ ] Initialize Chrome extension project:
+- [x] Initialize Chrome extension project:
   - Manifest V3
   - Vite + React for popup
   - TypeScript throughout
   - CRXJS or similar Vite plugin for extension dev
-- [ ] Configure manifest.json:
+- [x] Configure manifest.json:
   - Permissions: `bookmarks`, `activeTab`, `storage`, `scripting`
   - Host permissions: `x.com`, `twitter.com`, `linkedin.com`, `localhost:*`, `openrouter.ai`
   - Commands: keyboard shortcut `Ctrl+Shift+V` for capture
   - Service worker: `background/service-worker.ts`
-- [ ] Import core processing module from Phase 1
-- [ ] Verify extension loads in Chrome (`chrome://extensions` dev mode)
+- [x] Import core processing module from Phase 1
+- [x] Verify extension loads in Chrome (`chrome://extensions` dev mode)
 
 #### 2.1.2 Settings page
 
-- [ ] Build settings UI in popup:
+- [x] Build settings UI in popup:
   - API key input (with show/hide toggle)
   - LLM provider dropdown (Claude, OpenAI -- future: more)
   - Obsidian REST API URL (default: `https://localhost:27124`)
   - Obsidian REST API key input
   - Default folder path
   - Connection test button ("Test Vault Connection")
-- [ ] Store settings in `chrome.storage.sync`
-- [ ] Onboarding flow for first-time setup (3 steps: API key -> Vault connection -> Done)
+- [x] Store settings in `chrome.storage.sync`
+- [~] Onboarding flow for first-time setup (3 steps: API key -> Vault connection -> Done)
 
 ### Sprint 2.2: Bookmark Browser + Batch Processing (Day 2-4) [TODO]
 

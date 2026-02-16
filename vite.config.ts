@@ -21,9 +21,13 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.{ts,tsx}"],
     alias: {
       "@": resolve(__dirname, "src"),
     },
+    environmentMatchGlobs: [
+      ["tests/**/*.test.tsx", "jsdom"],
+    ],
+    setupFiles: ["tests/setup.ts"],
   },
 });

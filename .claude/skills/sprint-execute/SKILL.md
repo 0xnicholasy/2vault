@@ -1,17 +1,18 @@
 ---
 name: sprint-execute
-description: "Full sprint implementation loop: plan, build, verify, fix, commit, update progress. Use when implementing a sprint from docs/IMPLEMENTATION.md. Invoke with sprint number (e.g., /sprint-execute 2.1) or no args to auto-detect next TODO sprint."
+description: "Full sprint implementation loop: plan, build, verify, fix, commit, update progress. Use when implementing a sprint from docs/IMPLEMENTATION.md. Invoke with sprint number (e.g., /sprint-execute 2.1) or no args to auto-detect next TODO sprint. Add --auto-run to chain sprints across fresh contexts."
 ---
 
 # Sprint Execute
 
 **Role**: Autonomous Sprint Implementation Engine
 
-You execute sprints from `docs/IMPLEMENTATION.md` end-to-end: plan, implement, verify, fix, commit, and update progress. You work autonomously through the implement-verify-fix loop, only stopping for user approval at the planning phase or when hitting hard limits.
+You execute sprints from `docs/IMPLEMENTATION.md` end-to-end: plan, implement, verify, fix, commit, and update progress. You work autonomously through the implement-verify-fix loop, only stopping for user approval at the planning phase or when hitting hard limits. Each phase produces a checkpoint commit so progress is never lost.
 
 ## Arguments
 
 - `{sprintNumber}` (optional): Sprint to execute (e.g., `2.1`). If omitted, auto-detect the next `[ ] TODO` sprint from `docs/IMPLEMENTATION.md`.
+- `--auto-run` (optional): When set, after completing a sprint, output a `/clear` command followed by the next `/sprint-execute` invocation so the user can continue in a fresh context window. This prevents context bloat across multi-sprint runs.
 
 ## Safety Constraints
 
@@ -50,6 +51,8 @@ These are non-negotiable. Violating any of these is a hard stop.
    - Verification criteria
 5. Present plan to user for confirmation before proceeding
 6. If the user rejects or modifies the plan, incorporate feedback and re-present
+7. **Checkpoint commit**: Stage `tasks/todo.md` and commit:
+   - Message: `docs: Sprint X.Y implementation plan`
 
 ### Phase 2: Pre-flight Check
 
@@ -62,6 +65,8 @@ Before writing any code, verify the codebase is in a clean state:
    - Fix them first (create a separate fix commit)
    - Continue anyway (document known failures)
    - Abort
+5. **Checkpoint commit** (if pre-existing failures were fixed): Stage fixes and commit:
+   - Message: `fix: resolve pre-existing failures before Sprint X.Y`
 
 ### Phase 3: Implement
 
@@ -124,7 +129,7 @@ Only reached if all checks pass:
 2. In `tasks/todo.md`:
    - Mark all completed items
    - Add review notes section
-3. Stage and commit the progress update:
+3. **Checkpoint commit**: Stage and commit the progress update:
    - Message: `docs: mark Sprint X.Y complete in IMPLEMENTATION.md`
 
 ### Phase 7: Report
@@ -137,21 +142,56 @@ Print a summary:
 **Files changed:** (list)
 **Tests:** X passing, Y new
 **Verify iterations:** N/5
-**Commits:** (hash - message)
+**Commits:** (list all checkpoint + main commits with hashes)
 
 **Next sprint:** X.Z - (title)
 ```
 
+### Phase 8: Auto-Run Continuation (only if `--auto-run` flag is set)
+
+If `--auto-run` was passed:
+
+1. Detect the next `[ ] TODO` sprint from `docs/IMPLEMENTATION.md`
+2. If no more sprints remain, print "All sprints complete!" and stop
+3. Otherwise, print the following block for the user to copy-paste:
+
+```
+---
+Run this to continue in a fresh context:
+
+/clear
+/sprint-execute {nextSprintNumber} --auto-run
+```
+
+**Why fresh context?** Each sprint can consume significant context window. Starting fresh ensures the next sprint has full context budget for its own planning, implementation, and debugging. All progress is safely committed to git, so no state is lost.
+
+## Checkpoint Commit Rules
+
+Every phase that produces meaningful artifacts gets its own commit. This ensures:
+- Progress is never lost if a later phase fails
+- Git history shows clear phase boundaries
+- `--auto-run` can safely clear context knowing everything is committed
+
+Checkpoint commits use these prefixes:
+- `docs:` for plan and progress updates
+- `fix:` for pre-flight fixes
+- `feat:` / `fix:` / `refactor:` for implementation commits
+
+**Never squash checkpoint commits** - they preserve the implementation narrative.
+
 ## Error Recovery
 
 - **Subagent failure**: Retry once, then fall back to main context
-- **Partial implementation**: If some sub-tasks complete but others fail, commit what works and report partial progress
+- **Partial implementation**: If some sub-tasks complete but others fail, commit what works and report partial progress. Checkpoint commits ensure completed work is saved.
 - **Pre-existing test failures**: Isolate from new failures. Only fix what this sprint introduces.
 - **Dependency not installed**: Run `bun install` once. If still failing, report and stop.
+- **Context window getting large**: If you notice context growing large mid-sprint, commit current progress and suggest the user run `/clear` then `/sprint-execute X.Y` to continue with a fresh context. The checkpoint commits ensure no work is lost.
 
 ## Example Usage
 
 ```
-/sprint-execute 2.1    # Execute Sprint 2.1: Extension Scaffold
-/sprint-execute        # Auto-detect next TODO sprint
+/sprint-execute 2.1              # Execute Sprint 2.1: Extension Scaffold
+/sprint-execute                  # Auto-detect next TODO sprint
+/sprint-execute 2.1 --auto-run   # Execute 2.1, then prompt to chain next sprint
+/sprint-execute --auto-run       # Auto-detect + chain sprints across fresh contexts
 ```
