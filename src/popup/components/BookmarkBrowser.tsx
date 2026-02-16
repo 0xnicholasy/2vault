@@ -19,6 +19,20 @@ interface BookmarkBrowserProps {
   processing: boolean;
 }
 
+function parseUrls(text: string): string[] {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const valid: string[] = [];
+  for (const line of lines) {
+    try {
+      new URL(line);
+      valid.push(line);
+    } catch {
+      // skip invalid URLs
+    }
+  }
+  return [...new Set(valid)];
+}
+
 function flattenUrls(folder: BookmarkFolder): string[] {
   const urls = folder.urls.map((u) => u.url);
   for (const child of folder.children) {
@@ -31,7 +45,9 @@ function countUrls(folder: BookmarkFolder): number {
   return flattenUrls(folder).length;
 }
 
-function buildTree(nodes: chrome.bookmarks.BookmarkTreeNode[]): BookmarkFolder[] {
+function buildTree(
+  nodes: chrome.bookmarks.BookmarkTreeNode[]
+): BookmarkFolder[] {
   const folders: BookmarkFolder[] = [];
 
   for (const node of nodes) {
@@ -132,11 +148,16 @@ function FolderNode({
   );
 }
 
-export function BookmarkBrowser({ onProcess, processing }: BookmarkBrowserProps) {
+export function BookmarkBrowser({
+  onProcess,
+  processing,
+}: BookmarkBrowserProps) {
   const [folders, setFolders] = useState<BookmarkFolder[]>([]);
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [configMissing, setConfigMissing] = useState(false);
+  const [directUrls, setDirectUrls] = useState("");
+  const [parsedUrls, setParsedUrls] = useState<string[]>([]);
 
   useEffect(() => {
     getConfig().then((config) => {
@@ -180,10 +201,22 @@ export function BookmarkBrowser({ onProcess, processing }: BookmarkBrowserProps)
     [onProcess]
   );
 
+  const handleDirectUrlChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const text = e.target.value;
+      setDirectUrls(text);
+      setParsedUrls(parseUrls(text));
+    },
+    []
+  );
+
   if (configMissing) {
     return (
       <div className="config-guard">
-        <p>Configure your API keys in the Settings tab to start processing bookmarks.</p>
+        <p>
+          Configure your API keys in the Settings tab to start processing
+          bookmarks.
+        </p>
       </div>
     );
   }
@@ -192,36 +225,61 @@ export function BookmarkBrowser({ onProcess, processing }: BookmarkBrowserProps)
     return <div className="placeholder">Loading bookmarks...</div>;
   }
 
-  if (folders.length === 0) {
-    return <div className="placeholder">No bookmark folders found</div>;
-  }
-
   return (
     <div className="bookmark-browser">
-      {selectedUrls.size > 0 && (
-        <div className="bookmark-actions">
+      <div className="direct-url-input">
+        <label htmlFor="directUrls">Paste URLs (one per line)</label>
+        <textarea
+          id="directUrls"
+          value={directUrls}
+          onChange={handleDirectUrlChange}
+          placeholder={"https://example.com/article\nhttps://..."}
+          rows={3}
+        />
+        <div className="direct-url-actions">
+          <span className="url-count">
+            {parsedUrls.length} valid URL{parsedUrls.length !== 1 ? "s" : ""}
+          </span>
           <button
-            className="btn btn-primary"
-            onClick={handleProcessSelected}
-            disabled={processing}
+            className="btn btn-primary btn-sm"
+            onClick={() => onProcess(parsedUrls)}
+            disabled={processing || parsedUrls.length === 0}
           >
-            Process Selected ({selectedUrls.size})
+            Process URLs
           </button>
         </div>
-      )}
-
-      <div className="bookmark-tree">
-        {folders.map((folder) => (
-          <FolderNode
-            key={folder.id}
-            folder={folder}
-            selectedUrls={selectedUrls}
-            onToggleUrl={toggleUrl}
-            onProcessFolder={handleProcessFolder}
-            processing={processing}
-          />
-        ))}
       </div>
+
+      {folders.length > 0 && (
+        <>
+          <div className="url-divider">or browse bookmarks</div>
+
+          {selectedUrls.size > 0 && (
+            <div className="bookmark-actions">
+              <button
+                className="btn btn-primary"
+                onClick={handleProcessSelected}
+                disabled={processing}
+              >
+                Process Selected ({selectedUrls.size})
+              </button>
+            </div>
+          )}
+
+          <div className="bookmark-tree">
+            {folders.map((folder) => (
+              <FolderNode
+                key={folder.id}
+                folder={folder}
+                selectedUrls={selectedUrls}
+                onToggleUrl={toggleUrl}
+                onProcessFolder={handleProcessFolder}
+                processing={processing}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

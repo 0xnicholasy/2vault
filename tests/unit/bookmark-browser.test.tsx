@@ -224,7 +224,7 @@ describe("BookmarkBrowser", () => {
     });
   });
 
-  it("renders empty state when no bookmarks", async () => {
+  it("renders empty state without bookmark tree when no bookmarks", async () => {
     setupChromeMock([
       {
         id: "0",
@@ -237,10 +237,12 @@ describe("BookmarkBrowser", () => {
     render(<BookmarkBrowser onProcess={onProcess} processing={false} />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText("No bookmark folders found")
-      ).toBeInTheDocument();
+      // Direct URL input should still render
+      expect(screen.getByLabelText(/Paste URLs/)).toBeInTheDocument();
     });
+
+    // Bookmark divider and tree should not render
+    expect(screen.queryByText("or browse bookmarks")).not.toBeInTheDocument();
   });
 
   it("disables Process buttons when processing is active", async () => {
@@ -253,5 +255,92 @@ describe("BookmarkBrowser", () => {
 
     const processButton = screen.getAllByText("Process")[0]!;
     expect(processButton).toBeDisabled();
+  });
+
+  // -- Direct URL input tests --
+
+  it("renders URL textarea", async () => {
+    const onProcess = vi.fn();
+    render(<BookmarkBrowser onProcess={onProcess} processing={false} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Paste URLs/)).toBeInTheDocument();
+    });
+  });
+
+  it("shows valid URL count after entering URLs", async () => {
+    const onProcess = vi.fn();
+    render(<BookmarkBrowser onProcess={onProcess} processing={false} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Paste URLs/)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/Paste URLs/), {
+      target: { value: "https://example.com/a\nhttps://example.com/b" },
+    });
+
+    expect(screen.getByText("2 valid URLs")).toBeInTheDocument();
+  });
+
+  it("shows 0 count for invalid URLs and disables button", async () => {
+    const onProcess = vi.fn();
+    render(<BookmarkBrowser onProcess={onProcess} processing={false} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Paste URLs/)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/Paste URLs/), {
+      target: { value: "not-a-url\nalso-invalid" },
+    });
+
+    expect(screen.getByText("0 valid URLs")).toBeInTheDocument();
+    expect(screen.getByText("Process URLs")).toBeDisabled();
+  });
+
+  it("clicking Process URLs calls onProcess with parsed URLs", async () => {
+    const onProcess = vi.fn();
+    render(<BookmarkBrowser onProcess={onProcess} processing={false} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Paste URLs/)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/Paste URLs/), {
+      target: { value: "https://example.com/a\nhttps://example.com/b" },
+    });
+
+    fireEvent.click(screen.getByText("Process URLs"));
+
+    expect(onProcess).toHaveBeenCalledWith([
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
+  });
+
+  it("deduplicates URLs in direct input", async () => {
+    const onProcess = vi.fn();
+    render(<BookmarkBrowser onProcess={onProcess} processing={false} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Paste URLs/)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/Paste URLs/), {
+      target: {
+        value:
+          "https://example.com/a\nhttps://example.com/a\nhttps://example.com/b",
+      },
+    });
+
+    // Only 2 unique URLs
+    expect(screen.getByText("2 valid URLs")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Process URLs"));
+    expect(onProcess).toHaveBeenCalledWith([
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
   });
 });
