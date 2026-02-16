@@ -44,6 +44,7 @@
     - pr-review-toolkit:code-reviewer (agent): After writing code
     - pr-review-toolkit:silent-failure-hunter (agent): After error handling code
     - git-commit (skill): Conventional commits
+    - sprint-execute (skill): Full sprint loop - plan, build, verify, fix, commit, update
     - claude-md-management:revise-claude-md (skill): Update CLAUDE.md with learnings
     - clarification (skill): When requirements are ambiguous
 -->

@@ -317,6 +317,7 @@ When working on this project, use these specialized tools. Each `docs/*.md` file
 | `clarification` | When requirements are ambiguous - ask before deciding |
 | `pr-review-toolkit:review-pr` | Comprehensive PR review before merging |
 | `claude-md-management:revise-claude-md` | Update this file with session learnings |
+| `sprint-execute` | Full sprint implementation loop: plan, build, verify, fix, commit, update progress |
 
 ### Agents (invoke via Task tool)
 

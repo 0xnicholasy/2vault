@@ -42,3 +42,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Generated validation output
 scripts/results.json
+
+# Session-specific task tracking
+tasks/
