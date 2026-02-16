@@ -20,8 +20,8 @@ bun run typecheck    # TypeScript type-check only (fast verification)
 bun run build        # Production build -> dist/ (load as unpacked extension)
 
 # Testing
-bun test             # Run Vitest tests
-bun test:watch       # Watch mode
+bun run test         # Run Vitest tests (NOT `bun test` which uses bun's built-in runner)
+bun run test:watch   # Watch mode
 
 # Validation (requires .env with API keys + Obsidian running)
 bun run validate     # Process URLs from scripts/urls.txt through full pipeline
@@ -275,7 +275,7 @@ Progress is tracked in `docs/IMPLEMENTATION.md` using this legend:
 
 **Status:**
 - **Phase 1 (Core Module):** Sprints 1.1-1.4 [x] DONE. API frozen.
-- **Phase 2 (Extension):** Sprints 2.1-2.4 [ ] TODO (next).
+- **Phase 2 (Extension):** Sprints 2.1-2.2 [x] DONE. Sprint 2.3-2.4 [ ] TODO (next).
 - **Phase 3 (Managed Tier):** [~] DEFERRED (only after Phase 2 live with 100+ installs).
 
 ## Phase Boundaries

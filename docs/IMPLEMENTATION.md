@@ -220,35 +220,35 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 - [x] Store settings in `chrome.storage.sync`
 - [~] Onboarding flow for first-time setup (3 steps: API key -> Vault connection -> Done)
 
-### Sprint 2.2: Bookmark Browser + Batch Processing (Day 2-4) [TODO]
+### Sprint 2.2: Bookmark Browser + Batch Processing (Day 2-4) [DONE]
 
 #### 2.2.1 Bookmark folder UI
 
-- [ ] Build `BookmarkBrowser` component:
+- [x] Build `BookmarkBrowser` component:
   - Use `chrome.bookmarks.getTree()` to list all bookmark folders
   - Tree view with expandable folders
   - Show URL count per folder
   - "Process This Folder" button per folder
   - Select/deselect individual URLs within a folder
-- [ ] Style with minimal, clean UI (match Obsidian aesthetic: dark mode default)
+- [x] Style with minimal, clean UI (match Obsidian aesthetic: dark mode default)
 
 #### 2.2.2 Batch processing flow
 
-- [ ] When user clicks "Process":
+- [x] When user clicks "Process":
   1. Collect selected URLs
   2. Show processing modal with progress bar
   3. Pass URLs to orchestrator (from core module)
   4. Display real-time status per URL (fetching... / summarizing... / created / failed)
   5. Show results summary when done
-- [ ] Handle cancellation (user closes popup mid-process)
-- [ ] Background processing via service worker (popup can close, processing continues)
+- [x] Handle cancellation (user closes popup mid-process)
+- [x] Background processing via service worker (popup can close, processing continues)
 
 #### 2.2.3 Keyboard shortcut capture
 
-- [ ] Register `Ctrl+Shift+V` command in manifest
-- [ ] On shortcut: capture current tab URL + page content
-- [ ] Process immediately (single URL, no batch UI needed)
-- [ ] Show browser notification on completion: "Saved to [folder] in Obsidian"
+- [x] Register `Ctrl+Shift+V` command in manifest
+- [x] On shortcut: capture current tab URL + page content
+- [x] Process immediately (single URL, no batch UI needed)
+- [x] Show browser notification on completion: "Saved to [folder] in Obsidian"
 
 ### Sprint 2.3: Social Media Content Scripts (Day 4-6) [TODO]
 
