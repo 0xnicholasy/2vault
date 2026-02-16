@@ -69,8 +69,8 @@ describe("Settings", () => {
   });
 
   it("loads existing config on mount", async () => {
-    mockSyncStore["apiKey"] = "sk-or-test";
-    mockSyncStore["vaultUrl"] = "https://localhost:9999";
+    mockSyncStore["apiKey"] = "sk-or-test-abcdefghijklmnop";
+    mockSyncStore["vaultUrl"] = "https://localhost:27124";
     mockSyncStore["vaultApiKey"] = "vault-key-123";
     mockSyncStore["defaultFolder"] = "Notes";
 
@@ -78,11 +78,12 @@ describe("Settings", () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText("OpenRouter API Key")).toHaveValue(
-        "sk-or-test"
+        "sk-or-test-abcdefghijklmnop"
       );
     });
+    // Vault URL is now a select dropdown; HTTPS preset should be selected
     expect(screen.getByLabelText("Obsidian Vault URL")).toHaveValue(
-      "https://localhost:9999"
+      "https://localhost:27124"
     );
     expect(screen.getByLabelText("Default Folder")).toHaveValue("Notes");
   });
@@ -91,14 +92,16 @@ describe("Settings", () => {
     render(<Settings />);
 
     const apiKeyInput = screen.getByLabelText("OpenRouter API Key");
-    fireEvent.change(apiKeyInput, { target: { value: "sk-or-new" } });
+    fireEvent.change(apiKeyInput, {
+      target: { value: "sk-or-v1-abcdefghijklmnop" },
+    });
 
     const saveBtn = screen.getByText("Save Settings");
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
       expect(chrome.storage.sync.set).toHaveBeenCalledWith({
-        apiKey: "sk-or-new",
+        apiKey: "sk-or-v1-abcdefghijklmnop",
       });
     });
   });
@@ -107,7 +110,7 @@ describe("Settings", () => {
     render(<Settings />);
 
     fireEvent.change(screen.getByLabelText("OpenRouter API Key"), {
-      target: { value: "changed" },
+      target: { value: "sk-or-v1-abcdefghijklmnop" },
     });
     fireEvent.click(screen.getByText("Save Settings"));
 
@@ -117,7 +120,7 @@ describe("Settings", () => {
   });
 
   it("tests both OpenRouter and Vault on test button click", async () => {
-    mockSyncStore["apiKey"] = "sk-or-test";
+    mockSyncStore["apiKey"] = "sk-or-test-abcdefghijklmnop";
     mockSyncStore["vaultApiKey"] = "existing-key";
     render(<Settings />);
 
@@ -130,7 +133,9 @@ describe("Settings", () => {
     fireEvent.click(screen.getByText("Test Connections"));
 
     await waitFor(() => {
-      expect(mockTestOpenRouter).toHaveBeenCalledWith("sk-or-test");
+      expect(mockTestOpenRouter).toHaveBeenCalledWith(
+        "sk-or-test-abcdefghijklmnop"
+      );
       expect(mockTestConnection).toHaveBeenCalled();
     });
   });
@@ -138,7 +143,7 @@ describe("Settings", () => {
   it("shows separate success statuses for both connections", async () => {
     mockTestOpenRouter.mockResolvedValue(true);
     mockTestConnection.mockResolvedValue(true);
-    mockSyncStore["apiKey"] = "sk-or-test";
+    mockSyncStore["apiKey"] = "sk-or-test-abcdefghijklmnop";
     mockSyncStore["vaultApiKey"] = "existing-key";
     render(<Settings />);
 
@@ -159,7 +164,7 @@ describe("Settings", () => {
   it("shows individual failure when only vault fails", async () => {
     mockTestOpenRouter.mockResolvedValue(true);
     mockTestConnection.mockResolvedValue(false);
-    mockSyncStore["apiKey"] = "sk-or-test";
+    mockSyncStore["apiKey"] = "sk-or-test-abcdefghijklmnop";
     mockSyncStore["vaultApiKey"] = "bad-key";
     render(<Settings />);
 
@@ -220,5 +225,99 @@ describe("Settings", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("Vault Name")).toHaveValue("Test Vault");
     });
+  });
+
+  // -- Validation tests --
+
+  it("shows validation error for invalid OpenRouter key prefix", async () => {
+    render(<Settings />);
+
+    fireEvent.change(screen.getByLabelText("OpenRouter API Key"), {
+      target: { value: "sk-test-abcdefghijklmnop" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Must start with/)).toBeInTheDocument();
+    });
+  });
+
+  it("shows validation error for too-short OpenRouter key", async () => {
+    render(<Settings />);
+
+    fireEvent.change(screen.getByLabelText("OpenRouter API Key"), {
+      target: { value: "sk-or-short" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/too short/)).toBeInTheDocument();
+    });
+  });
+
+  it("shows validation error for too-short vault API key", async () => {
+    render(<Settings />);
+
+    fireEvent.change(screen.getByLabelText("Obsidian Vault API Key"), {
+      target: { value: "abc" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/too short/)).toBeInTheDocument();
+    });
+  });
+
+  it("disables save button when validation error is present", async () => {
+    render(<Settings />);
+
+    fireEvent.change(screen.getByLabelText("OpenRouter API Key"), {
+      target: { value: "invalid-key" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Save Settings")).toBeDisabled();
+    });
+  });
+
+  // -- Vault URL dropdown tests --
+
+  it("renders vault URL dropdown with presets", () => {
+    render(<Settings />);
+
+    const select = screen.getByLabelText("Obsidian Vault URL");
+    expect(select.tagName).toBe("SELECT");
+    expect(screen.getByText("HTTP (localhost:27123)")).toBeInTheDocument();
+    expect(screen.getByText("HTTPS (localhost:27124)")).toBeInTheDocument();
+    expect(screen.getByText("Custom...")).toBeInTheDocument();
+  });
+
+  it("selects HTTPS preset by default", () => {
+    render(<Settings />);
+
+    const select = screen.getByLabelText("Obsidian Vault URL");
+    expect(select).toHaveValue("https://localhost:27124");
+  });
+
+  it("shows custom input when Custom is selected", async () => {
+    render(<Settings />);
+
+    const select = screen.getByLabelText("Obsidian Vault URL");
+    fireEvent.change(select, { target: { value: "custom" } });
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/your-obsidian-url/)).toBeInTheDocument();
+    });
+  });
+
+  it("defaults to Custom when stored URL does not match a preset", async () => {
+    mockSyncStore["vaultUrl"] = "https://my-server:9999";
+    render(<Settings />);
+
+    await waitFor(() => {
+      const select = screen.getByLabelText("Obsidian Vault URL");
+      expect(select).toHaveValue("custom");
+    });
+
+    expect(screen.getByPlaceholderText(/your-obsidian-url/)).toHaveValue(
+      "https://my-server:9999"
+    );
   });
 });

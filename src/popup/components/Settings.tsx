@@ -3,7 +3,15 @@ import { IoEye, IoEyeOff } from "react-icons/io5";
 import { VaultClient } from "@/core/vault-client";
 import { testOpenRouterConnection } from "@/core/openrouter-provider";
 import { getConfig, setSyncStorage } from "@/utils/storage";
-import { DEFAULT_VAULT_URL, DEFAULT_FOLDER } from "@/utils/config";
+import {
+  DEFAULT_VAULT_URL,
+  DEFAULT_FOLDER,
+  PARA_DESCRIPTIONS,
+  VAULT_URL_PRESETS,
+} from "@/utils/config";
+import type { VaultOrganization, TagGroup } from "@/core/types";
+import { TagGroupEditor } from "@/popup/components/TagGroupEditor";
+import { validateOpenRouterKey, validateVaultApiKey } from "@/utils/validation";
 
 type ConnectionStatus = "idle" | "testing" | "success" | "error";
 type SaveStatus = "idle" | "saving" | "saved";
@@ -14,9 +22,15 @@ export function Settings() {
   const [vaultApiKey, setVaultApiKey] = useState("");
   const [defaultFolder, setDefaultFolder] = useState(DEFAULT_FOLDER);
   const [vaultName, setVaultName] = useState("");
+  const [vaultOrganization, setVaultOrganization] =
+    useState<VaultOrganization>("para");
+  const [tagGroups, setTagGroups] = useState<TagGroup[]>([]);
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [showVaultApiKey, setShowVaultApiKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string>();
+  const [vaultApiKeyError, setVaultApiKeyError] = useState<string>();
+  const [vaultUrlPreset, setVaultUrlPreset] = useState(DEFAULT_VAULT_URL);
 
   const [llmStatus, setLlmStatus] = useState<ConnectionStatus>("idle");
   const [vaultStatus, setVaultStatus] = useState<ConnectionStatus>("idle");
@@ -30,6 +44,13 @@ export function Settings() {
       setVaultApiKey(config.vaultApiKey);
       setDefaultFolder(config.defaultFolder);
       setVaultName(config.vaultName);
+      setVaultOrganization(config.vaultOrganization);
+      setTagGroups(config.tagGroups);
+      // Derive preset from stored URL
+      const matchingPreset = VAULT_URL_PRESETS.find(
+        (p) => p.value === config.vaultUrl
+      );
+      setVaultUrlPreset(matchingPreset ? matchingPreset.value : "custom");
     });
   }, []);
 
@@ -44,13 +65,14 @@ export function Settings() {
     setLlmStatus("testing");
     setVaultStatus("testing");
 
-    // Test both in parallel
     const [llmOk, vaultOk] = await Promise.all([
       apiKey
         ? testOpenRouterConnection(apiKey).catch(() => false)
         : Promise.resolve(false),
       vaultApiKey
-        ? new VaultClient(vaultUrl, vaultApiKey).testConnection().catch(() => false)
+        ? new VaultClient(vaultUrl, vaultApiKey)
+            .testConnection()
+            .catch(() => false)
         : Promise.resolve(false),
     ]);
 
@@ -66,10 +88,20 @@ export function Settings() {
       setSyncStorage("vaultApiKey", vaultApiKey),
       setSyncStorage("defaultFolder", defaultFolder),
       setSyncStorage("vaultName", vaultName),
+      setSyncStorage("vaultOrganization", vaultOrganization),
+      setSyncStorage("tagGroups", tagGroups),
     ]);
     setDirty(false);
     setSaveStatus("saved");
-  }, [apiKey, vaultUrl, vaultApiKey, defaultFolder, vaultName]);
+  }, [
+    apiKey,
+    vaultUrl,
+    vaultApiKey,
+    defaultFolder,
+    vaultName,
+    vaultOrganization,
+    tagGroups,
+  ]);
 
   return (
     <div className="settings">
@@ -81,7 +113,10 @@ export function Settings() {
             type={showApiKey ? "text" : "password"}
             value={apiKey}
             onChange={(e) => {
-              setApiKey(e.target.value);
+              const val = e.target.value;
+              setApiKey(val);
+              const result = validateOpenRouterKey(val);
+              setApiKeyError(result.error);
               markDirty();
             }}
             placeholder="sk-or-..."
@@ -95,20 +130,41 @@ export function Settings() {
             {showApiKey ? <IoEyeOff /> : <IoEye />}
           </button>
         </div>
+        {apiKeyError && <span className="form-error">{apiKeyError}</span>}
       </div>
 
       <div className="form-group">
-        <label htmlFor="vaultUrl">Obsidian Vault URL</label>
-        <input
-          id="vaultUrl"
-          type="text"
-          value={vaultUrl}
+        <label htmlFor="vaultUrlPreset">Obsidian Vault URL</label>
+        <select
+          id="vaultUrlPreset"
+          value={vaultUrlPreset}
           onChange={(e) => {
-            setVaultUrl(e.target.value);
+            const selected = e.target.value;
+            setVaultUrlPreset(selected);
+            if (selected !== "custom") {
+              setVaultUrl(selected);
+            }
             markDirty();
           }}
-          placeholder={DEFAULT_VAULT_URL}
-        />
+        >
+          {VAULT_URL_PRESETS.map((preset) => (
+            <option key={preset.value} value={preset.value}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
+        {vaultUrlPreset === "custom" && (
+          <input
+            id="vaultUrl"
+            type="text"
+            value={vaultUrl}
+            onChange={(e) => {
+              setVaultUrl(e.target.value);
+              markDirty();
+            }}
+            placeholder="https://your-obsidian-url:port"
+          />
+        )}
       </div>
 
       <div className="form-group">
@@ -119,7 +175,10 @@ export function Settings() {
             type={showVaultApiKey ? "text" : "password"}
             value={vaultApiKey}
             onChange={(e) => {
-              setVaultApiKey(e.target.value);
+              const val = e.target.value;
+              setVaultApiKey(val);
+              const result = validateVaultApiKey(val);
+              setVaultApiKeyError(result.error);
               markDirty();
             }}
             placeholder="Enter vault API key"
@@ -135,6 +194,9 @@ export function Settings() {
             {showVaultApiKey ? <IoEyeOff /> : <IoEye />}
           </button>
         </div>
+        {vaultApiKeyError && (
+          <span className="form-error">{vaultApiKeyError}</span>
+        )}
       </div>
 
       <div className="form-group">
@@ -168,6 +230,62 @@ export function Settings() {
         </span>
       </div>
 
+      <div className="form-group">
+        <label>Vault Organization</label>
+        <div className="radio-group">
+          <label className="radio-option">
+            <input
+              type="radio"
+              name="vaultOrganization"
+              value="para"
+              checked={vaultOrganization === "para"}
+              onChange={() => {
+                setVaultOrganization("para");
+                markDirty();
+              }}
+            />
+            <span>PARA</span>
+          </label>
+          <label className="radio-option">
+            <input
+              type="radio"
+              name="vaultOrganization"
+              value="custom"
+              checked={vaultOrganization === "custom"}
+              onChange={() => {
+                setVaultOrganization("custom");
+                markDirty();
+              }}
+            />
+            <span>Custom</span>
+          </label>
+        </div>
+        {vaultOrganization === "para" && (
+          <div className="para-description">
+            {Object.entries(PARA_DESCRIPTIONS).map(([folder, desc]) => (
+              <div key={folder} className="para-folder-desc">
+                <strong>{folder}</strong>: {desc}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="form-group">
+        <label>Tag Groups</label>
+        <span className="form-hint">
+          Define tag groups for consistent categorization. The AI will prefer
+          tags from these groups.
+        </span>
+        <TagGroupEditor
+          tagGroups={tagGroups}
+          onChange={(groups) => {
+            setTagGroups(groups);
+            markDirty();
+          }}
+        />
+      </div>
+
       <div className="form-actions">
         <button
           className="btn btn-secondary"
@@ -184,8 +302,12 @@ export function Settings() {
         <div className="connection-results">
           <div className="connection-result">
             <span>OpenRouter API:</span>
-            {llmStatus === "testing" && <span className="status-testing">Testing...</span>}
-            {llmStatus === "success" && <span className="status-success">Connected</span>}
+            {llmStatus === "testing" && (
+              <span className="status-testing">Testing...</span>
+            )}
+            {llmStatus === "success" && (
+              <span className="status-success">Connected</span>
+            )}
             {llmStatus === "error" && (
               <span className="status-error">
                 {apiKey ? "Connection failed" : "No API key"}
@@ -194,8 +316,12 @@ export function Settings() {
           </div>
           <div className="connection-result">
             <span>Obsidian Vault:</span>
-            {vaultStatus === "testing" && <span className="status-testing">Testing...</span>}
-            {vaultStatus === "success" && <span className="status-success">Connected</span>}
+            {vaultStatus === "testing" && (
+              <span className="status-testing">Testing...</span>
+            )}
+            {vaultStatus === "success" && (
+              <span className="status-success">Connected</span>
+            )}
             {vaultStatus === "error" && (
               <span className="status-error">
                 {vaultApiKey ? "Connection failed" : "No API key"}
@@ -209,7 +335,12 @@ export function Settings() {
         <button
           className="btn btn-primary"
           onClick={handleSave}
-          disabled={saveStatus === "saving" || !dirty}
+          disabled={
+            saveStatus === "saving" ||
+            !dirty ||
+            !!apiKeyError ||
+            !!vaultApiKeyError
+          }
         >
           {saveStatus === "saving" ? "Saving..." : "Save Settings"}
         </button>

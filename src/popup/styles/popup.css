@@ -12,6 +12,7 @@
   --ctp-green: #a6e3a1;
   --ctp-red: #f38ba8;
   --ctp-overlay0: #6c7086;
+  --ctp-yellow: #f9e2af;
 }
 
 *,
@@ -495,6 +496,10 @@ body {
   color: var(--ctp-overlay0);
 }
 
+.status-icon-skipped {
+  color: var(--ctp-yellow);
+}
+
 .status-icon-active {
   color: var(--ctp-mauve);
 }
@@ -715,6 +720,11 @@ body {
   color: var(--ctp-red);
 }
 
+.status-badge-skipped {
+  background: rgba(249, 226, 175, 0.15);
+  color: var(--ctp-yellow);
+}
+
 .all-failed-banner {
   padding: 12px;
   background: rgba(243, 139, 168, 0.1);
@@ -767,6 +777,154 @@ body {
   gap: 16px;
 }
 
+/* Radio group */
+
+.radio-group {
+  display: flex;
+  gap: 16px;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ctp-text);
+  cursor: pointer;
+}
+
+.radio-option input[type="radio"] {
+  accent-color: var(--ctp-mauve);
+}
+
+/* PARA folder descriptions */
+
+.para-description {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--ctp-surface0);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.para-folder-desc {
+  font-size: 11px;
+  color: var(--ctp-subtext0);
+  line-height: 1.4;
+}
+
+.para-folder-desc strong {
+  color: var(--ctp-subtext1);
+}
+
+/* Tag group editor */
+
+.tag-group-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tag-group-item {
+  padding: 8px;
+  background: var(--ctp-surface0);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tag-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-group-header input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--ctp-surface1);
+  border-radius: 4px;
+  background: var(--ctp-mantle);
+  color: var(--ctp-text);
+  font-size: 12px;
+  outline: none;
+}
+
+.tag-group-header input:focus {
+  border-color: var(--ctp-mauve);
+}
+
+.tag-group-remove {
+  background: none;
+  border: none;
+  color: var(--ctp-red);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.tag-group-remove:hover {
+  opacity: 0.8;
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.tag-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  background: var(--ctp-surface1);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--ctp-text);
+}
+
+.tag-chip-remove {
+  background: none;
+  border: none;
+  color: var(--ctp-subtext0);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.tag-chip-remove:hover {
+  color: var(--ctp-red);
+}
+
+.tag-input {
+  padding: 2px 6px;
+  border: 1px solid var(--ctp-surface1);
+  border-radius: 4px;
+  background: var(--ctp-mantle);
+  color: var(--ctp-text);
+  font-size: 11px;
+  outline: none;
+  width: 80px;
+}
+
+.tag-input:focus {
+  border-color: var(--ctp-mauve);
+}
+
+.tag-input::placeholder {
+  color: var(--ctp-overlay0);
+}
+
 .config-guard-inline {
   display: flex;
   flex-direction: column;
@@ -777,4 +935,166 @@ body {
   text-align: center;
   color: var(--ctp-subtext0);
   font-size: 13px;
+}
+
+/* Form validation errors */
+
+.form-error {
+  font-size: 11px;
+  color: var(--ctp-red);
+  line-height: 1.4;
+}
+
+/* Select dropdown styling */
+
+.form-group select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ctp-surface1);
+  border-radius: 6px;
+  background: var(--ctp-surface0);
+  color: var(--ctp-text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.form-group select:focus {
+  border-color: var(--ctp-mauve);
+}
+
+/* Direct URL input */
+
+.direct-url-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.direct-url-input label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ctp-subtext1);
+}
+
+.direct-url-input textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ctp-surface1);
+  border-radius: 6px;
+  background: var(--ctp-surface0);
+  color: var(--ctp-text);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.15s;
+}
+
+.direct-url-input textarea:focus {
+  border-color: var(--ctp-mauve);
+}
+
+.direct-url-input textarea::placeholder {
+  color: var(--ctp-overlay0);
+}
+
+.direct-url-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.url-count {
+  font-size: 11px;
+  color: var(--ctp-subtext0);
+}
+
+.url-divider {
+  text-align: center;
+  color: var(--ctp-overlay0);
+  font-size: 11px;
+  padding: 8px 0;
+}
+
+/* Error category badges */
+
+.status-badge-network {
+  background: rgba(250, 179, 135, 0.15);
+  color: var(--ctp-peach, #fab387);
+}
+
+.status-badge-extraction {
+  background: rgba(249, 226, 175, 0.15);
+  color: var(--ctp-yellow, #f9e2af);
+}
+
+.status-badge-llm {
+  background: rgba(203, 166, 247, 0.15);
+  color: var(--ctp-mauve);
+}
+
+.status-badge-vault {
+  background: rgba(137, 180, 250, 0.15);
+  color: var(--ctp-blue, #89b4fa);
+}
+
+.status-badge-unknown {
+  background: rgba(108, 112, 134, 0.15);
+  color: var(--ctp-overlay0);
+}
+
+/* Expandable error rows */
+
+.error-row-expandable {
+  cursor: pointer;
+}
+
+.error-row-expandable:hover {
+  background: var(--ctp-surface0);
+}
+
+.error-expanded-details {
+  padding: 6px 8px;
+  background: var(--ctp-surface0);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.error-expanded-details .error-message {
+  color: var(--ctp-red);
+}
+
+.error-suggestion {
+  font-size: 11px;
+  color: var(--ctp-subtext0);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.error-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.copy-url-btn {
+  background: none;
+  border: 1px solid var(--ctp-surface1);
+  border-radius: 4px;
+  color: var(--ctp-subtext0);
+  cursor: pointer;
+  padding: 2px 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.copy-url-btn:hover {
+  color: var(--ctp-text);
+  border-color: var(--ctp-surface2);
 }
