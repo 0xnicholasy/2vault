@@ -6,20 +6,31 @@ import type {
   ProcessedNote,
   VaultContext,
 } from "@/core/types";
+import { VaultClientError, LLMProcessingError } from "@/core/types";
 
 // vi.hoisted ensures these are available when vi.mock factories run (hoisted above imports)
 const {
   mockFetchAndExtract,
   mockBuildVaultContext,
   mockCreateNote,
+  mockSearchNotes,
+  mockReadNote,
+  mockNoteExists,
+  mockAppendToNote,
   mockFormatNote,
   mockGenerateFilename,
+  mockFormatTagHubNote,
 } = vi.hoisted(() => ({
   mockFetchAndExtract: vi.fn(),
   mockBuildVaultContext: vi.fn(),
   mockCreateNote: vi.fn(),
+  mockSearchNotes: vi.fn(),
+  mockReadNote: vi.fn(),
+  mockNoteExists: vi.fn(),
+  mockAppendToNote: vi.fn(),
   mockFormatNote: vi.fn(),
   mockGenerateFilename: vi.fn(),
+  mockFormatTagHubNote: vi.fn(),
 }));
 
 vi.mock("@/core/extractor", () => ({
@@ -33,12 +44,17 @@ vi.mock("@/core/vault-analyzer", () => ({
 vi.mock("@/core/vault-client", () => ({
   VaultClient: class {
     createNote = mockCreateNote;
+    searchNotes = mockSearchNotes;
+    readNote = mockReadNote;
+    noteExists = mockNoteExists;
+    appendToNote = mockAppendToNote;
   },
 }));
 
 vi.mock("@/core/note-formatter", () => ({
   formatNote: mockFormatNote,
   generateFilename: mockGenerateFilename,
+  formatTagHubNote: mockFormatTagHubNote,
 }));
 
 import { processUrls, type ProgressCallback, type ExtractFn } from "@/core/orchestrator";
@@ -49,12 +65,17 @@ const TEST_CONFIG: Config = {
   vaultUrl: "https://localhost:27124",
   vaultApiKey: "test-vault-key",
   defaultFolder: "Inbox",
+  vaultName: "TestVault",
+  vaultOrganization: "custom",
+  tagGroups: [],
 };
 
 const MOCK_VAULT_CONTEXT: VaultContext = {
   folders: ["Inbox", "Reading/Articles"],
   tags: ["ai", "programming"],
   recentNotes: [],
+  tagGroups: [],
+  organization: "custom",
 };
 
 function createExtracted(
@@ -103,6 +124,11 @@ beforeEach(() => {
   mockFormatNote.mockReturnValue("# Formatted Note");
   mockGenerateFilename.mockReturnValue("test-article-summary.md");
   mockCreateNote.mockResolvedValue(undefined);
+  mockSearchNotes.mockResolvedValue([]);
+  mockReadNote.mockResolvedValue("");
+  mockNoteExists.mockResolvedValue(false);
+  mockAppendToNote.mockResolvedValue(undefined);
+  mockFormatTagHubNote.mockReturnValue("# Hub Note");
 });
 
 // -- Happy path ---------------------------------------------------------------
@@ -150,7 +176,7 @@ describe("processUrls - pipeline order", () => {
 
     mockProcessContent.mockImplementation(async () => {
       callOrder.push("process");
-      return createProcessed();
+      return createProcessed({ suggestedTags: [] });
     });
 
     mockFormatNote.mockImplementation(() => {
@@ -179,7 +205,7 @@ describe("processUrls - progress callbacks", () => {
 
     await processUrls(["https://example.com/a"], TEST_CONFIG, createMockProvider(), onProgress);
 
-    expect(statuses).toEqual(["extracting", "processing", "creating", "done"]);
+    expect(statuses).toEqual(["checking", "extracting", "processing", "creating", "done"]);
   });
 
   it("reports correct index and total", async () => {
@@ -196,17 +222,19 @@ describe("processUrls - progress callbacks", () => {
 
     await processUrls(urls, TEST_CONFIG, createMockProvider(), onProgress);
 
-    // First URL: index 0, total 2 (4 callbacks)
+    // First URL: index 0, total 2 (5 callbacks: checking, extracting, processing, creating, done)
     expect(calls[0]).toEqual({ index: 0, total: 2 });
     expect(calls[1]).toEqual({ index: 0, total: 2 });
     expect(calls[2]).toEqual({ index: 0, total: 2 });
     expect(calls[3]).toEqual({ index: 0, total: 2 });
+    expect(calls[4]).toEqual({ index: 0, total: 2 });
 
-    // Second URL: index 1, total 2 (4 callbacks)
-    expect(calls[4]).toEqual({ index: 1, total: 2 });
+    // Second URL: index 1, total 2 (5 callbacks)
     expect(calls[5]).toEqual({ index: 1, total: 2 });
     expect(calls[6]).toEqual({ index: 1, total: 2 });
     expect(calls[7]).toEqual({ index: 1, total: 2 });
+    expect(calls[8]).toEqual({ index: 1, total: 2 });
+    expect(calls[9]).toEqual({ index: 1, total: 2 });
   });
 });
 
@@ -413,5 +441,208 @@ describe("processUrls - custom extractFn", () => {
     expect(results[0]!.status).toBe("success");
     expect(results[1]!.status).toBe("success");
     expect(customExtract).toHaveBeenCalledTimes(2);
+  });
+});
+
+// -- Duplicate detection ------------------------------------------------------
+
+describe("processUrls - duplicate detection", () => {
+  it("skips duplicate URLs found in vault", async () => {
+    const url = "https://example.com/existing";
+    mockSearchNotes.mockResolvedValue([{ filename: "Inbox/existing.md", score: 1.0 }]);
+    mockReadNote.mockResolvedValue(
+      `---\nsource: ${url}\ndate_saved: 2026-01-01\n---\n# Existing Note`
+    );
+
+    const results = await processUrls([url], TEST_CONFIG, createMockProvider());
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.status).toBe("skipped");
+    expect(results[0]!.skipReason).toContain("Duplicate");
+    expect(mockFetchAndExtract).not.toHaveBeenCalled();
+  });
+
+  it("continues processing when URL is not a duplicate", async () => {
+    mockSearchNotes.mockResolvedValue([]);
+
+    const results = await processUrls(
+      ["https://example.com/new"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("success");
+    expect(mockFetchAndExtract).toHaveBeenCalled();
+  });
+
+  it("continues processing when duplicate check fails", async () => {
+    mockSearchNotes.mockRejectedValue(new Error("Search failed"));
+
+    const results = await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("success");
+  });
+});
+
+// -- Tag groups flow ----------------------------------------------------------
+
+describe("processUrls - tag groups in vault context", () => {
+  it("merges config tagGroups into vault context", async () => {
+    const configWithTags: Config = {
+      ...TEST_CONFIG,
+      tagGroups: [{ name: "Tech", tags: ["ai", "ml"] }],
+    };
+
+    await processUrls(
+      ["https://example.com/a"],
+      configWithTags,
+      createMockProvider()
+    );
+
+    // The provider should receive vaultContext with tag groups merged
+    const passedContext = mockProcessContent.mock.calls[0]![1] as VaultContext;
+    expect(passedContext.tagGroups).toEqual([{ name: "Tech", tags: ["ai", "ml"] }]);
+  });
+
+  it("merges config vaultOrganization into vault context", async () => {
+    const configWithPara: Config = {
+      ...TEST_CONFIG,
+      vaultOrganization: "para",
+    };
+
+    await processUrls(
+      ["https://example.com/a"],
+      configWithPara,
+      createMockProvider()
+    );
+
+    const passedContext = mockProcessContent.mock.calls[0]![1] as VaultContext;
+    expect(passedContext.organization).toBe("para");
+  });
+});
+
+// -- Hub note post-processing -------------------------------------------------
+
+describe("processUrls - hub notes", () => {
+  it("creates new hub notes for tags when they do not exist", async () => {
+    mockNoteExists.mockResolvedValue(false);
+
+    await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    // Default processed note has suggestedTags: ["ai"]
+    expect(mockNoteExists).toHaveBeenCalledWith("Tags/ai.md");
+    expect(mockCreateNote).toHaveBeenCalledWith("Tags/ai.md", "# Hub Note");
+  });
+
+  it("appends to existing hub notes", async () => {
+    mockNoteExists.mockResolvedValue(true);
+
+    await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(mockAppendToNote).toHaveBeenCalledWith(
+      "Tags/ai.md",
+      expect.stringContaining("[[test-article-summary]]")
+    );
+  });
+
+  it("continues on hub note failure", async () => {
+    mockNoteExists.mockRejectedValue(new Error("Hub check failed"));
+
+    const results = await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("success");
+  });
+});
+
+// -- Error categorization ------------------------------------------------------
+
+describe("processUrls - error categorization", () => {
+  it("sets errorCategory to 'extraction' when extraction fails", async () => {
+    mockFetchAndExtract.mockResolvedValue(
+      createExtracted({ status: "failed", error: "Page not found" })
+    );
+
+    const results = await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("failed");
+    expect(results[0]!.errorCategory).toBe("extraction");
+  });
+
+  it("sets errorCategory to 'llm' for LLMProcessingError", async () => {
+    mockProcessContent.mockRejectedValue(
+      new LLMProcessingError("Model unavailable", "summarization")
+    );
+
+    const results = await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("failed");
+    expect(results[0]!.errorCategory).toBe("llm");
+  });
+
+  it("sets errorCategory to 'vault' for VaultClientError", async () => {
+    mockCreateNote.mockRejectedValue(
+      new VaultClientError("Forbidden", 403, "/vault/Reading/Articles/test.md")
+    );
+
+    const results = await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("failed");
+    expect(results[0]!.errorCategory).toBe("vault");
+  });
+
+  it("sets errorCategory to 'network' for fetch TypeError", async () => {
+    mockProcessContent.mockRejectedValue(
+      new TypeError("fetch failed")
+    );
+
+    const results = await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("failed");
+    expect(results[0]!.errorCategory).toBe("network");
+  });
+
+  it("sets errorCategory to 'unknown' for generic errors", async () => {
+    mockProcessContent.mockRejectedValue(new Error("Something unexpected"));
+
+    const results = await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("failed");
+    expect(results[0]!.errorCategory).toBe("unknown");
   });
 });

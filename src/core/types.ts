@@ -11,10 +11,19 @@ export interface ExtractedContent {
   error?: string;
 }
 
+export type VaultOrganization = "para" | "custom";
+
+export interface TagGroup {
+  name: string;
+  tags: string[];
+}
+
 export interface VaultContext {
   folders: string[];
   tags: string[];
   recentNotes: NotePreview[];
+  tagGroups: TagGroup[];
+  organization: VaultOrganization;
 }
 
 export interface NotePreview {
@@ -34,12 +43,21 @@ export interface ProcessedNote {
   source: ExtractedContent;
 }
 
+export type ErrorCategory = "network" | "extraction" | "llm" | "vault" | "unknown";
+
 export interface ProcessingResult {
   url: string;
-  status: "success" | "failed";
+  status: "success" | "failed" | "skipped";
   note?: ProcessedNote;
   folder?: string;
   error?: string;
+  errorCategory?: ErrorCategory;
+  skipReason?: string;
+}
+
+export interface SearchResult {
+  filename: string;
+  score: number;
 }
 
 export interface LLMProvider {
@@ -56,6 +74,8 @@ export interface Config {
   vaultApiKey: string;
   defaultFolder: string;
   vaultName: string;
+  vaultOrganization: VaultOrganization;
+  tagGroups: TagGroup[];
 }
 
 /** Response from GET /vault/ and GET /vault/{dir}/ - returns plain string paths */
