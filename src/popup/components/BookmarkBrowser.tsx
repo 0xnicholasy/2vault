@@ -17,6 +17,7 @@ interface BookmarkFolder {
 interface BookmarkBrowserProps {
   onProcess: (urls: string[]) => void;
   processing: boolean;
+  initialUrl?: string;
 }
 
 function parseUrls(text: string): string[] {
@@ -151,6 +152,7 @@ function FolderNode({
 export function BookmarkBrowser({
   onProcess,
   processing,
+  initialUrl,
 }: BookmarkBrowserProps) {
   const [folders, setFolders] = useState<BookmarkFolder[]>([]);
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
@@ -174,6 +176,14 @@ export function BookmarkBrowser({
       setLoading(false);
     });
   }, []);
+
+  // Prefill URL textarea from context menu failure
+  useEffect(() => {
+    if (initialUrl) {
+      setDirectUrls(initialUrl);
+      setParsedUrls(parseUrls(initialUrl));
+    }
+  }, [initialUrl]);
 
   const toggleUrl = useCallback((url: string) => {
     setSelectedUrls((prev) => {

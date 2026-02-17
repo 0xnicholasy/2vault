@@ -90,6 +90,13 @@ function setupChromeMock() {
         ),
       },
       getURL: vi.fn((path: string) => `chrome-extension://abc123/${path}`),
+      getManifest: vi.fn(() => ({
+        content_scripts: [
+          { matches: ["https://x.com/*", "https://twitter.com/*"], js: ["src/content-scripts/twitter-extractor.js"] },
+          { matches: ["https://www.linkedin.com/*"], js: ["src/content-scripts/linkedin-extractor.js"] },
+          { matches: ["https://www.reddit.com/*", "https://old.reddit.com/*"], js: ["src/content-scripts/reddit-extractor.js"] },
+        ],
+      })),
     },
     contextMenus: {
       create: vi.fn(),
@@ -156,6 +163,19 @@ function setupChromeMock() {
     },
     notifications: {
       create: vi.fn(),
+      clear: vi.fn(),
+      onClicked: {
+        addListener: vi.fn(),
+      },
+    },
+    action: {
+      openPopup: vi.fn().mockResolvedValue(undefined),
+    },
+    scripting: {
+      executeScript: vi.fn().mockResolvedValue([{ result: undefined }]),
+    },
+    windows: {
+      create: vi.fn().mockResolvedValue({ id: 1 }),
     },
     storage: {
       sync: {

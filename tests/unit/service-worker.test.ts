@@ -110,6 +110,13 @@ function setupChromeMock() {
         ),
       },
       getURL: vi.fn((path: string) => `chrome-extension://abc123/${path}`),
+      getManifest: vi.fn(() => ({
+        content_scripts: [
+          { matches: ["https://x.com/*", "https://twitter.com/*"], js: ["src/content-scripts/twitter-extractor.js"] },
+          { matches: ["https://www.linkedin.com/*"], js: ["src/content-scripts/linkedin-extractor.js"] },
+          { matches: ["https://www.reddit.com/*", "https://old.reddit.com/*"], js: ["src/content-scripts/reddit-extractor.js"] },
+        ],
+      })),
     },
     contextMenus: {
       create: vi.fn(),
@@ -180,6 +187,19 @@ function setupChromeMock() {
     },
     notifications: {
       create: vi.fn(),
+      clear: vi.fn(),
+      onClicked: {
+        addListener: vi.fn(),
+      },
+    },
+    action: {
+      openPopup: vi.fn().mockResolvedValue(undefined),
+    },
+    scripting: {
+      executeScript: vi.fn().mockResolvedValue([{ result: undefined }]),
+    },
+    windows: {
+      create: vi.fn().mockResolvedValue({ id: 1 }),
     },
     storage: {
       sync: {
@@ -363,11 +383,18 @@ describe("Service worker - keyboard shortcut", () => {
 
     await vi.waitFor(() => {
       expect(chrome.notifications.create).toHaveBeenCalledWith(
+        "save-failed",
         expect.objectContaining({
-          message: "Failed: HTTP 404",
+          message: "Save failed - click extension icon to retry",
         })
       );
     });
+
+    // Should store pending URL for popup prefill
+    expect(mockSetLocalStorage).toHaveBeenCalledWith(
+      "pendingCaptureUrl",
+      "https://example.com/current-page"
+    );
   });
 
   it("does not process chrome:// URLs", () => {
@@ -692,24 +719,24 @@ describe("Service worker - context menu", () => {
     expect(contextMenuClickListener).toBeTruthy();
   });
 
-  it("handles page context click - saves current page URL", async () => {
+  it("handles page context click - stores URL and opens popup", async () => {
     contextMenuClickListener!(
       { menuItemId: "save-page-to-2vault" } as chrome.contextMenus.OnClickData,
       { id: 10, url: "https://example.com/article" } as chrome.tabs.Tab
     );
 
     await vi.waitFor(() => {
-      expect(mockProcessUrls).toHaveBeenCalledWith(
-        ["https://example.com/article"],
-        TEST_CONFIG,
-        expect.anything(),
-        undefined,
-        expect.any(Function)
+      expect(mockSetLocalStorage).toHaveBeenCalledWith(
+        "pendingCaptureUrl",
+        "https://example.com/article"
+      );
+      expect(chrome.windows.create).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "popup" })
       );
     });
   });
 
-  it("handles link context click - saves linked URL", async () => {
+  it("handles link context click - stores URL and opens popup", async () => {
     contextMenuClickListener!(
       {
         menuItemId: "save-link-to-2vault",
@@ -719,12 +746,12 @@ describe("Service worker - context menu", () => {
     );
 
     await vi.waitFor(() => {
-      expect(mockProcessUrls).toHaveBeenCalledWith(
-        ["https://example.com/linked-page"],
-        TEST_CONFIG,
-        expect.anything(),
-        undefined,
-        expect.any(Function)
+      expect(mockSetLocalStorage).toHaveBeenCalledWith(
+        "pendingCaptureUrl",
+        "https://example.com/linked-page"
+      );
+      expect(chrome.windows.create).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "popup" })
       );
     });
   });
@@ -736,7 +763,8 @@ describe("Service worker - context menu", () => {
     );
 
     await new Promise((r) => setTimeout(r, 50));
-    expect(mockProcessUrls).not.toHaveBeenCalled();
+    expect(mockSetLocalStorage).not.toHaveBeenCalledWith("pendingCaptureUrl", expect.anything());
+    expect(chrome.windows.create).not.toHaveBeenCalled();
   });
 
   it("ignores about: URLs for page context", async () => {
@@ -746,7 +774,8 @@ describe("Service worker - context menu", () => {
     );
 
     await new Promise((r) => setTimeout(r, 50));
-    expect(mockProcessUrls).not.toHaveBeenCalled();
+    expect(mockSetLocalStorage).not.toHaveBeenCalledWith("pendingCaptureUrl", expect.anything());
+    expect(chrome.windows.create).not.toHaveBeenCalled();
   });
 
   it("handles missing tab gracefully for page context", async () => {
@@ -756,7 +785,8 @@ describe("Service worker - context menu", () => {
     );
 
     await new Promise((r) => setTimeout(r, 50));
-    expect(mockProcessUrls).not.toHaveBeenCalled();
+    expect(mockSetLocalStorage).not.toHaveBeenCalledWith("pendingCaptureUrl", expect.anything());
+    expect(chrome.windows.create).not.toHaveBeenCalled();
   });
 
   it("handles missing linkUrl gracefully for link context", async () => {
@@ -766,46 +796,23 @@ describe("Service worker - context menu", () => {
     );
 
     await new Promise((r) => setTimeout(r, 50));
-    expect(mockProcessUrls).not.toHaveBeenCalled();
+    expect(mockSetLocalStorage).not.toHaveBeenCalledWith("pendingCaptureUrl", expect.anything());
+    expect(chrome.windows.create).not.toHaveBeenCalled();
   });
 
-  it("uses active tab extraction for social media page context", async () => {
+  it("stores social media URL and opens popup for page context", async () => {
     contextMenuClickListener!(
       { menuItemId: "save-page-to-2vault" } as chrome.contextMenus.OnClickData,
       { id: 42, url: "https://x.com/user/status/123" } as chrome.tabs.Tab
     );
 
     await vi.waitFor(() => {
-      expect(mockProcessUrls).toHaveBeenCalledWith(
-        ["https://x.com/user/status/123"],
-        TEST_CONFIG,
-        expect.anything(),
-        undefined,
-        expect.any(Function)
+      expect(mockSetLocalStorage).toHaveBeenCalledWith(
+        "pendingCaptureUrl",
+        "https://x.com/user/status/123"
       );
-    });
-
-    // For social media on the active tab, should NOT open a new tab
-    expect(chrome.tabs.create).not.toHaveBeenCalled();
-  });
-
-  it("shows success notification after page context save", async () => {
-    mockProcessUrls.mockResolvedValue([
-      { url: "https://example.com/article", status: "success", folder: "Resources" },
-    ]);
-
-    contextMenuClickListener!(
-      { menuItemId: "save-page-to-2vault" } as chrome.contextMenus.OnClickData,
-      { id: 10, url: "https://example.com/article" } as chrome.tabs.Tab
-    );
-
-    await vi.waitFor(() => {
-      expect(chrome.notifications.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "basic",
-          title: "2Vault",
-          message: "Saved to Resources",
-        })
+      expect(chrome.windows.create).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "popup" })
       );
     });
   });

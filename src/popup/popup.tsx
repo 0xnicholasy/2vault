@@ -8,7 +8,7 @@ import { Settings } from "./components/Settings";
 import { BookmarkBrowser } from "./components/BookmarkBrowser";
 import { ProcessingModal } from "./components/ProcessingModal";
 import { StatusTab } from "./components/StatusTab";
-import { getProcessingState } from "@/utils/storage";
+import { getProcessingState, getLocalStorage } from "@/utils/storage";
 import "./styles/popup.css";
 
 type Tab = "settings" | "bookmarks" | "status";
@@ -30,6 +30,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>("bookmarks");
   const [processingState, setProcessingState] = useState<ProcessingState | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [initialUrl, setInitialUrl] = useState<string | undefined>();
 
   // Check for active processing on mount
   useEffect(() => {
@@ -39,6 +40,28 @@ function App() {
         if (state.active) {
           setShowModal(true);
         }
+      }
+    });
+  }, []);
+
+  // Auto-process URL from context menu or keyboard shortcut failure
+  useEffect(() => {
+    getLocalStorage("pendingCaptureUrl").then((url) => {
+      if (url) {
+        chrome.storage.local.remove("pendingCaptureUrl");
+        chrome.runtime.sendMessage(
+          { type: "START_PROCESSING", urls: [url] },
+          (response) => {
+            if (response?.type === "PROCESSING_STARTED") {
+              setShowModal(true);
+            } else {
+              // Batch already active - prefill URL for later retry
+              setInitialUrl(url);
+              setActiveTab("bookmarks");
+              setShowModal(true);
+            }
+          }
+        );
       }
     });
   }, []);
@@ -108,6 +131,7 @@ function App() {
             <BookmarkBrowser
               onProcess={handleStartProcessing}
               processing={isProcessing}
+              initialUrl={initialUrl}
             />
           )}
           {activeTab === "status" && (

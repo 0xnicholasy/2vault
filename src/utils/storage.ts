@@ -17,6 +17,7 @@ interface LocalStorage {
   vaultContextTimestamp: number;
   processingHistory: ProcessingResult[];
   processingState: ProcessingState;
+  pendingCaptureUrl: string;
 }
 
 export async function getSyncStorage<K extends keyof SyncStorage>(

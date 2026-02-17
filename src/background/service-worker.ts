@@ -27,6 +27,58 @@ export function isSocialMediaUrl(url: string): boolean {
   return SOCIAL_MEDIA_PATTERNS.some((pattern) => pattern.test(url));
 }
 
+// -- Helpers ------------------------------------------------------------------
+
+const SEND_RETRY_COUNT = 3;
+const SEND_RETRY_DELAY_MS = 500;
+
+/** Retry chrome.tabs.sendMessage with backoff for content script load timing */
+async function sendMessageWithRetry(
+  tabId: number,
+  message: Record<string, string>,
+): Promise<ExtractionResultMessage> {
+  for (let attempt = 0; attempt <= SEND_RETRY_COUNT; attempt++) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, message);
+      return response as ExtractionResultMessage;
+    } catch (err) {
+      const isConnectionError =
+        err instanceof Error &&
+        err.message.includes("Could not establish connection");
+      if (!isConnectionError || attempt === SEND_RETRY_COUNT) throw err;
+      await new Promise((resolve) =>
+        setTimeout(resolve, SEND_RETRY_DELAY_MS * (attempt + 1))
+      );
+    }
+  }
+  throw new Error("sendMessage failed after retries");
+}
+
+/** Look up the content script file for a URL from the built manifest */
+function getContentScriptForUrl(url: string): string | null {
+  const manifest = chrome.runtime.getManifest();
+  for (const cs of manifest.content_scripts ?? []) {
+    const isMatch = cs.matches?.some((pattern) => {
+      const regexStr = pattern
+        .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*/g, ".*");
+      return new RegExp(`^${regexStr}$`).test(url);
+    });
+    if (isMatch) return cs.js?.[0] ?? null;
+  }
+  return null;
+}
+
+/** Open popup as a standalone window (works without user gesture context) */
+async function openPopupWindow(): Promise<void> {
+  await chrome.windows.create({
+    url: chrome.runtime.getURL("src/popup/popup.html"),
+    type: "popup",
+    width: 420,
+    height: 600,
+  });
+}
+
 // -- Tab-based DOM extraction -------------------------------------------------
 
 const DOM_EXTRACT_TIMEOUT_MS = 15_000;
@@ -57,9 +109,9 @@ export async function extractViaDom(url: string): Promise<ExtractedContent> {
     // Wait for tab to finish loading
     await waitForTabLoad(tabId);
 
-    // Request extraction from content script
+    // Request extraction from content script (retry for document_idle timing)
     const response = await Promise.race([
-      chrome.tabs.sendMessage(tabId, { type: "EXTRACT_CONTENT" }) as Promise<ExtractionResultMessage>,
+      sendMessageWithRetry(tabId, { type: "EXTRACT_CONTENT" }),
       rejectAfterTimeout(DOM_EXTRACT_TIMEOUT_MS),
     ]);
 
@@ -121,9 +173,29 @@ async function extractFromActiveTab(tabId: number, url: string): Promise<Extract
       rejectAfterTimeout(DOM_EXTRACT_TIMEOUT_MS),
     ]);
     return response.data;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Active tab extraction failed";
-    return createFailedExtraction(url, message);
+  } catch {
+    // Content script not loaded (tab opened before extension). Re-inject and retry.
+    console.warn("[2Vault] Active tab extraction failed, re-injecting content script");
+    try {
+      const scriptFile = getContentScriptForUrl(url);
+      if (scriptFile) {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: [scriptFile],
+        });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const response = await Promise.race([
+          chrome.tabs.sendMessage(tabId, { type: "EXTRACT_CONTENT" }) as Promise<ExtractionResultMessage>,
+          rejectAfterTimeout(DOM_EXTRACT_TIMEOUT_MS),
+        ]);
+        return response.data;
+      }
+    } catch (err) {
+      console.warn("[2Vault] Re-injection failed:", err instanceof Error ? err.message : err);
+    }
+    // Last resort: background tab extraction with retry
+    console.warn("[2Vault] Falling back to background tab extraction");
+    return extractViaDom(url);
   }
 }
 
@@ -247,11 +319,21 @@ async function handleSingleUrlCapture(
       message: `Saved to ${result.folder ?? "vault"}`,
     });
   } else {
-    chrome.notifications.create({
+    // Store URL for popup prefill on retry
+    await setLocalStorage("pendingCaptureUrl", url);
+
+    // Open popup window so user can see the error and retry
+    try {
+      await openPopupWindow();
+    } catch {
+      // Window creation failed - notification will guide user
+    }
+
+    chrome.notifications.create("save-failed", {
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
       title: "2Vault",
-      message: `Failed: ${result?.error ?? "Unknown error"}`,
+      message: "Save failed - click extension icon to retry",
     });
   }
 
@@ -282,11 +364,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === "save-page-to-2vault") {
     const url = tab?.url;
     if (!url || url.startsWith("chrome://") || url.startsWith("about:")) return;
-    await handleSingleUrlCapture(url, tab?.id);
+    // Store URL and open popup - popup auto-starts processing with visible progress
+    await setLocalStorage("pendingCaptureUrl", url);
+    await openPopupWindow();
   } else if (info.menuItemId === "save-link-to-2vault") {
     const linkUrl = info.linkUrl;
     if (!linkUrl) return;
-    await handleSingleUrlCapture(linkUrl, tab?.id);
+    await setLocalStorage("pendingCaptureUrl", linkUrl);
+    await openPopupWindow();
   }
 });
 
@@ -303,6 +388,17 @@ chrome.commands.onCommand.addListener((command) => {
       handleSingleUrlCapture(url, tab?.id).catch((err) => {
         console.error("[2Vault] Capture failed:", err);
       });
+    });
+  }
+});
+
+// Notification click handler - open popup to retry with prefilled URL
+chrome.notifications.onClicked.addListener((notificationId) => {
+  if (notificationId === "save-failed") {
+    chrome.notifications.clear(notificationId);
+    // pendingCaptureUrl is already in storage - popup will read it on mount
+    openPopupWindow().catch(() => {
+      // If window creation fails, user can click the extension icon
     });
   }
 });
