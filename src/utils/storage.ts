@@ -10,6 +10,8 @@ interface SyncStorage {
   vaultName: string;
   vaultOrganization: VaultOrganization;
   tagGroups: TagGroup[];
+  onboardingComplete: boolean;
+  onboardingStep: number;
 }
 
 interface LocalStorage {
@@ -95,4 +97,17 @@ export async function getProcessingHistory(): Promise<ProcessingResult[]> {
 
 export async function clearProcessingHistory(): Promise<void> {
   await chrome.storage.local.remove("processingHistory");
+}
+
+export async function isFirstTimeUser(): Promise<boolean> {
+  const complete = await getSyncStorage("onboardingComplete");
+  return complete !== true;
+}
+
+export async function markOnboardingComplete(): Promise<void> {
+  await setSyncStorage("onboardingComplete", true);
+}
+
+export async function setOnboardingStep(step: number): Promise<void> {
+  await setSyncStorage("onboardingStep", step);
 }
