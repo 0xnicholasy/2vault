@@ -66,6 +66,13 @@ let messageListener:
       sendResponse: (response: unknown) => void
     ) => boolean | void)
   | null = null;
+let installedListener: (() => void) | null = null;
+let contextMenuClickListener:
+  | ((
+      info: chrome.contextMenus.OnClickData,
+      tab?: chrome.tabs.Tab
+    ) => void)
+  | null = null;
 
 // Track onUpdated listeners for tab load simulation
 let tabUpdateListeners: Array<
@@ -84,6 +91,11 @@ function setupChromeMock() {
       },
     },
     runtime: {
+      onInstalled: {
+        addListener: vi.fn((fn: () => void) => {
+          installedListener = fn;
+        }),
+      },
       onMessage: {
         addListener: vi.fn(
           (
@@ -98,6 +110,21 @@ function setupChromeMock() {
         ),
       },
       getURL: vi.fn((path: string) => `chrome-extension://abc123/${path}`),
+    },
+    contextMenus: {
+      create: vi.fn(),
+      onClicked: {
+        addListener: vi.fn(
+          (
+            fn: (
+              info: chrome.contextMenus.OnClickData,
+              tab?: chrome.tabs.Tab
+            ) => void
+          ) => {
+            contextMenuClickListener = fn;
+          }
+        ),
+      },
     },
     tabs: {
       query: vi.fn(
@@ -180,6 +207,8 @@ beforeEach(async () => {
   vi.clearAllMocks();
   commandListener = null;
   messageListener = null;
+  installedListener = null;
+  contextMenuClickListener = null;
   setupChromeMock();
 
   mockGetConfig.mockResolvedValue(TEST_CONFIG);
@@ -556,6 +585,60 @@ describe("Service worker - isSocialMediaUrl", () => {
   });
 });
 
+// -- Reddit URL routing -------------------------------------------------------
+
+describe("Service worker - Reddit URL routing", () => {
+  it("routes reddit.com URLs through smartExtract (social media path)", async () => {
+    (chrome.tabs.query as ReturnType<typeof vi.fn>).mockImplementation(
+      (
+        _query: chrome.tabs.QueryInfo,
+        callback: (tabs: chrome.tabs.Tab[]) => void
+      ) => {
+        callback([
+          { id: 50, url: "https://www.reddit.com/r/webdev/comments/abc/test" } as chrome.tabs.Tab,
+        ]);
+      }
+    );
+
+    commandListener!("capture-current-page");
+
+    await vi.waitFor(() => {
+      expect(mockProcessUrls).toHaveBeenCalledWith(
+        ["https://www.reddit.com/r/webdev/comments/abc/test"],
+        TEST_CONFIG,
+        expect.anything(),
+        undefined,
+        expect.any(Function)
+      );
+    });
+  });
+
+  it("routes old.reddit.com URLs through smartExtract", async () => {
+    (chrome.tabs.query as ReturnType<typeof vi.fn>).mockImplementation(
+      (
+        _query: chrome.tabs.QueryInfo,
+        callback: (tabs: chrome.tabs.Tab[]) => void
+      ) => {
+        callback([
+          { id: 51, url: "https://old.reddit.com/r/webdev/comments/abc/test" } as chrome.tabs.Tab,
+        ]);
+      }
+    );
+
+    commandListener!("capture-current-page");
+
+    await vi.waitFor(() => {
+      expect(mockProcessUrls).toHaveBeenCalledWith(
+        ["https://old.reddit.com/r/webdev/comments/abc/test"],
+        TEST_CONFIG,
+        expect.anything(),
+        undefined,
+        expect.any(Function)
+      );
+    });
+  });
+});
+
 // -- extractViaDom (tab-based extraction) -------------------------------------
 
 describe("Service worker - tab-based DOM extraction", () => {
@@ -583,5 +666,147 @@ describe("Service worker - tab-based DOM extraction", () => {
       expect.any(Function),
       expect.any(Function)
     );
+  });
+});
+
+// -- Context menu -------------------------------------------------------------
+
+describe("Service worker - context menu", () => {
+  it("registers context menu items on install", () => {
+    expect(installedListener).toBeTruthy();
+    installedListener!();
+
+    expect(chrome.contextMenus.create).toHaveBeenCalledWith({
+      id: "save-page-to-2vault",
+      title: "Save to 2Vault",
+      contexts: ["page"],
+    });
+    expect(chrome.contextMenus.create).toHaveBeenCalledWith({
+      id: "save-link-to-2vault",
+      title: "Save Link to 2Vault",
+      contexts: ["link"],
+    });
+  });
+
+  it("registers context menu click listener", () => {
+    expect(contextMenuClickListener).toBeTruthy();
+  });
+
+  it("handles page context click - saves current page URL", async () => {
+    contextMenuClickListener!(
+      { menuItemId: "save-page-to-2vault" } as chrome.contextMenus.OnClickData,
+      { id: 10, url: "https://example.com/article" } as chrome.tabs.Tab
+    );
+
+    await vi.waitFor(() => {
+      expect(mockProcessUrls).toHaveBeenCalledWith(
+        ["https://example.com/article"],
+        TEST_CONFIG,
+        expect.anything(),
+        undefined,
+        expect.any(Function)
+      );
+    });
+  });
+
+  it("handles link context click - saves linked URL", async () => {
+    contextMenuClickListener!(
+      {
+        menuItemId: "save-link-to-2vault",
+        linkUrl: "https://example.com/linked-page",
+      } as chrome.contextMenus.OnClickData,
+      { id: 10, url: "https://example.com/current" } as chrome.tabs.Tab
+    );
+
+    await vi.waitFor(() => {
+      expect(mockProcessUrls).toHaveBeenCalledWith(
+        ["https://example.com/linked-page"],
+        TEST_CONFIG,
+        expect.anything(),
+        undefined,
+        expect.any(Function)
+      );
+    });
+  });
+
+  it("ignores chrome:// URLs for page context", async () => {
+    contextMenuClickListener!(
+      { menuItemId: "save-page-to-2vault" } as chrome.contextMenus.OnClickData,
+      { id: 10, url: "chrome://extensions" } as chrome.tabs.Tab
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockProcessUrls).not.toHaveBeenCalled();
+  });
+
+  it("ignores about: URLs for page context", async () => {
+    contextMenuClickListener!(
+      { menuItemId: "save-page-to-2vault" } as chrome.contextMenus.OnClickData,
+      { id: 10, url: "about:blank" } as chrome.tabs.Tab
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockProcessUrls).not.toHaveBeenCalled();
+  });
+
+  it("handles missing tab gracefully for page context", async () => {
+    contextMenuClickListener!(
+      { menuItemId: "save-page-to-2vault" } as chrome.contextMenus.OnClickData,
+      undefined
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockProcessUrls).not.toHaveBeenCalled();
+  });
+
+  it("handles missing linkUrl gracefully for link context", async () => {
+    contextMenuClickListener!(
+      { menuItemId: "save-link-to-2vault" } as chrome.contextMenus.OnClickData,
+      { id: 10, url: "https://example.com" } as chrome.tabs.Tab
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockProcessUrls).not.toHaveBeenCalled();
+  });
+
+  it("uses active tab extraction for social media page context", async () => {
+    contextMenuClickListener!(
+      { menuItemId: "save-page-to-2vault" } as chrome.contextMenus.OnClickData,
+      { id: 42, url: "https://x.com/user/status/123" } as chrome.tabs.Tab
+    );
+
+    await vi.waitFor(() => {
+      expect(mockProcessUrls).toHaveBeenCalledWith(
+        ["https://x.com/user/status/123"],
+        TEST_CONFIG,
+        expect.anything(),
+        undefined,
+        expect.any(Function)
+      );
+    });
+
+    // For social media on the active tab, should NOT open a new tab
+    expect(chrome.tabs.create).not.toHaveBeenCalled();
+  });
+
+  it("shows success notification after page context save", async () => {
+    mockProcessUrls.mockResolvedValue([
+      { url: "https://example.com/article", status: "success", folder: "Resources" },
+    ]);
+
+    contextMenuClickListener!(
+      { menuItemId: "save-page-to-2vault" } as chrome.contextMenus.OnClickData,
+      { id: 10, url: "https://example.com/article" } as chrome.tabs.Tab
+    );
+
+    await vi.waitFor(() => {
+      expect(chrome.notifications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "basic",
+          title: "2Vault",
+          message: "Saved to Resources",
+        })
+      );
+    });
   });
 });

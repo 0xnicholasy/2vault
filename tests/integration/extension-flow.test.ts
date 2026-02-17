@@ -73,6 +73,9 @@ function setupChromeMock() {
       },
     },
     runtime: {
+      onInstalled: {
+        addListener: vi.fn(),
+      },
       onMessage: {
         addListener: vi.fn(
           (
@@ -87,6 +90,12 @@ function setupChromeMock() {
         ),
       },
       getURL: vi.fn((path: string) => `chrome-extension://abc123/${path}`),
+    },
+    contextMenus: {
+      create: vi.fn(),
+      onClicked: {
+        addListener: vi.fn(),
+      },
     },
     tabs: {
       query: vi.fn(

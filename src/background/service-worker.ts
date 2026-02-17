@@ -19,6 +19,8 @@ const SOCIAL_MEDIA_PATTERNS = [
   /^https?:\/\/(www\.)?x\.com\//,
   /^https?:\/\/(www\.)?twitter\.com\//,
   /^https?:\/\/(www\.)?linkedin\.com\//,
+  /^https?:\/\/(www\.)?reddit\.com\//,
+  /^https?:\/\/old\.reddit\.com\//,
 ];
 
 export function isSocialMediaUrl(url: string): boolean {
@@ -260,6 +262,33 @@ async function handleSingleUrlCapture(
     await setLocalStorage("processingHistory", updated);
   }
 }
+
+// -- Context menu -------------------------------------------------------------
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: "save-page-to-2vault",
+    title: "Save to 2Vault",
+    contexts: ["page"],
+  });
+  chrome.contextMenus.create({
+    id: "save-link-to-2vault",
+    title: "Save Link to 2Vault",
+    contexts: ["link"],
+  });
+});
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === "save-page-to-2vault") {
+    const url = tab?.url;
+    if (!url || url.startsWith("chrome://") || url.startsWith("about:")) return;
+    await handleSingleUrlCapture(url, tab?.id);
+  } else if (info.menuItemId === "save-link-to-2vault") {
+    const linkUrl = info.linkUrl;
+    if (!linkUrl) return;
+    await handleSingleUrlCapture(linkUrl, tab?.id);
+  }
+});
 
 // Keyboard shortcut handler
 chrome.commands.onCommand.addListener((command) => {

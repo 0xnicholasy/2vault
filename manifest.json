@@ -3,7 +3,7 @@
   "name": "2Vault - AI Bookmark Digester",
   "version": "0.0.1",
   "description": "AI extension that reads, digests, and files your bookmarks into Obsidian. Vault-aware categorization. BYOK. Open source.",
-  "permissions": ["bookmarks", "activeTab", "storage", "scripting", "notifications"],
+  "permissions": ["bookmarks", "activeTab", "storage", "scripting", "notifications", "contextMenus"],
   "host_permissions": [
     "*://*/*"
   ],
@@ -29,6 +29,11 @@
     {
       "matches": ["https://www.linkedin.com/*"],
       "js": ["src/content-scripts/linkedin-extractor.ts"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.reddit.com/*", "https://old.reddit.com/*"],
+      "js": ["src/content-scripts/reddit-extractor.ts"],
       "run_at": "document_idle"
     }
   ],
