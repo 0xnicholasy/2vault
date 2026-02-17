@@ -533,6 +533,60 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 
 ---
 
+### Sprint 2.8: Thread & Forum Extraction [TODO]
+
+**Goal:** Improve X thread extraction (distinguish author thread vs. replies, capture top replies) and add Reddit as a supported platform. Thread/conversation context is critical for summarization quality before GTM launch.
+
+<!-- Claude Code Tooling:
+  - browser-extension-builder (skill): Content script patterns, manifest updates
+  - bug-detective (agent): DOM selector fragility, edge cases
+  - typescript-expert (skill): ExtractedContent type updates
+  - javascript-testing-patterns (skill): DOM fixture testing strategy
+  - sprint-execute (skill): Full sprint loop
+-->
+
+#### 2.8.1 Improve X/Twitter Thread Extraction
+
+- [ ] Distinguish author's own thread tweets from replies by other users
+- [ ] Label author thread vs. conversation replies in extracted content
+- [ ] Capture top replies (by engagement) beyond just author's thread
+- [ ] Add thread metadata: total reply count indicator ("Showing 5 of 47 replies")
+- [ ] Handle "Show more replies" button click to load additional replies
+- [ ] Set max extraction depth (author thread unlimited, replies capped at top 5-10)
+- [ ] Update note title format: `Thread by @handle (N tweets) + M replies`
+- [ ] Test with 5+ real thread URLs of varying sizes
+
+#### 2.8.2 Add Reddit Content Script
+
+- [ ] Create `src/content-scripts/reddit-extractor.ts`
+- [ ] Add Reddit URL patterns to `manifest.json` content_scripts + host_permissions
+- [ ] Extract post: title, author, subreddit, score, timestamp, flair
+- [ ] Extract post body (self-text or link post)
+- [ ] Extract top N comments (sorted by upvotes, default N=5)
+- [ ] Flatten nested replies into readable thread view (indent level indicator)
+- [ ] Handle both old.reddit.com and new reddit.com DOM structures
+- [ ] Add `platform: "reddit"` to ExtractedContent type
+- [ ] Fallback to Readability if DOM extraction fails
+- [ ] Test on 10+ Reddit URLs (r/ObsidianMD, r/programming, r/PKMS)
+
+#### 2.8.3 Update Core Pipeline for Thread Context
+
+- [ ] Update `ExtractedContent` type if needed (thread metadata fields)
+- [ ] Update LLM prompts to handle thread/conversation context properly
+- [ ] Update `note-formatter.ts` templates for Reddit platform
+- [ ] Ensure duplicate detection works for Reddit URLs
+
+#### 2.8.4 Tests
+
+- [ ] Unit tests for reddit-extractor.ts (mock DOM fixtures)
+- [ ] Unit tests for improved X thread extraction (author vs. replies)
+- [ ] Add `tests/fixtures/html/reddit-thread.html` fixture
+- [ ] Add `tests/fixtures/expected/reddit-thread.md` expected output
+- [ ] Update existing twitter-thread fixture if extraction format changes
+- [ ] Manual testing: 5 Reddit + 5 X thread URLs end-to-end
+
+---
+
 ## Phase 3: Managed Tier + Growth (Future) [DEFERRED]
 
 Only after Phase 2 is live and has 100+ installs.

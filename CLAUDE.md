@@ -299,8 +299,10 @@ Progress is tracked in `docs/IMPLEMENTATION.md` using this legend:
 **Status:**
 - **Phase 1 (Core Module):** Sprints 1.1-1.4 [x] DONE. API frozen.
 - **Phase 2 (Extension):** Sprints 2.1-2.4 [x] DONE.
-- **Phase 2.5 (Core Intelligence):** [ ] TODO. Duplicate detection, PARA organization, tag groups, tag consistency, graph linkage.
-- **Phase 2.6 (UX Polish):** [ ] TODO. Better error UI, direct URL input, API key validation, vault URL dropdown.
+- **Phase 2.5 (Core Intelligence):** [x] DONE. Duplicate detection, PARA organization, tag groups, tag consistency, graph linkage.
+- **Phase 2.6 (UX Polish):** [x] DONE. Better error UI, direct URL input, API key validation, vault URL dropdown.
+- **Phase 2.7 (UIUX Fixes):** [x] DONE. Parallel processing, status labels, progress bug, URL normalization.
+- **Phase 2.8 (Thread & Forum Extraction):** [ ] TODO. Improve X thread extraction (author vs replies), add Reddit content script, update pipeline for thread context.
 - **Phase 3 (GTM):** [ ] TODO. Onboarding wizard + landing page + Chrome Web Store + launch. See `docs/GTM-IMPLEMENTATION.md` for Sprints 3.1-3.5.
 - **Phase 4 (Managed Tier):** [~] DEFERRED (only after Phase 3 live with 100+ installs).
 
@@ -318,14 +320,21 @@ Wire core module into Chrome extension. Build popup UI, content scripts, service
 
 **Done when:** Extension installed from `dist/`, bookmark folder batch processing works, X/LinkedIn capture works, settings page functional.
 
-### Phase 2.5-2.6: Intelligence + Polish - NEXT
+### Phase 2.5-2.7: Intelligence + Polish + UIUX - DONE
 
 Sprint 2.5: Duplicate detection, PARA organization, tag groups, tag consistency, graph linkage via hub notes.
 Sprint 2.6: Better error UI, direct URL input, API key validation, vault URL dropdown.
+Sprint 2.7: Parallel processing, status labels, progress bug, URL normalization.
 
 **Done when:** PARA organization works, duplicates are skipped, tag hub notes appear in graph view, URLs can be pasted directly.
 
-### Phase 3: GTM - Onboarding + Landing Page + Launch - NEXT
+### Phase 2.8: Thread & Forum Extraction - NEXT
+
+Sprint 2.8: Improve X/Twitter thread extraction (distinguish author thread vs. replies, capture top replies). Add Reddit as a supported platform with content script. Update core pipeline for thread context.
+
+**Done when:** X threads capture author's thread + top replies with metadata. Reddit posts extract title + body + top 5 comments. LLM prompts handle conversation context. Tests pass.
+
+### Phase 3: GTM - Onboarding + Landing Page + Launch
 
 5 sprints tracked in `docs/GTM-IMPLEMENTATION.md`:
 - Sprint 3.1: Planning & Decisions (resolve 5 open decisions)
