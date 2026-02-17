@@ -1,0 +1,373 @@
+/* Catppuccin Mocha palette */
+:root {
+  --ctp-base: #1e1e2e;
+  --ctp-mantle: #181825;
+  --ctp-surface0: #313244;
+  --ctp-surface1: #45475a;
+  --ctp-surface2: #585b70;
+  --ctp-text: #cdd6f4;
+  --ctp-subtext0: #a6adc8;
+  --ctp-subtext1: #bac2de;
+  --ctp-mauve: #cba6f7;
+  --ctp-green: #a6e3a1;
+  --ctp-red: #f38ba8;
+  --ctp-overlay0: #6c7086;
+  --ctp-yellow: #f9e2af;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--ctp-base);
+  color: var(--ctp-text);
+  min-height: 100vh;
+}
+
+a {
+  color: var(--ctp-mauve);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Container */
+
+.onboarding-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.onboarding-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--ctp-subtext0);
+  font-size: 14px;
+}
+
+/* Header */
+
+.onboarding-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.onboarding-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ctp-mauve);
+}
+
+.onboarding-subtitle {
+  font-size: 14px;
+  color: var(--ctp-subtext0);
+}
+
+/* Progress steps */
+
+.progress-steps {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  margin-bottom: 40px;
+}
+
+.progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--ctp-surface0);
+  color: var(--ctp-subtext0);
+  border: 2px solid var(--ctp-surface1);
+  transition: all 0.2s;
+}
+
+.progress-step.active .step-dot {
+  background: var(--ctp-mauve);
+  color: var(--ctp-base);
+  border-color: var(--ctp-mauve);
+}
+
+.progress-step.completed .step-dot {
+  background: var(--ctp-green);
+  color: var(--ctp-base);
+  border-color: var(--ctp-green);
+}
+
+.step-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ctp-subtext0);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.progress-step.active .step-label {
+  color: var(--ctp-text);
+}
+
+.progress-step.completed .step-label {
+  color: var(--ctp-green);
+}
+
+/* Main content */
+
+.onboarding-main {
+  flex: 1;
+}
+
+.step-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.step-content h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ctp-text);
+}
+
+.step-description {
+  font-size: 14px;
+  color: var(--ctp-subtext0);
+  line-height: 1.6;
+}
+
+/* Form elements (reuse popup patterns) */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ctp-subtext1);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ctp-surface1);
+  border-radius: 6px;
+  background: var(--ctp-surface0);
+  color: var(--ctp-text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--ctp-mauve);
+}
+
+.form-group input::placeholder {
+  color: var(--ctp-overlay0);
+}
+
+.form-error {
+  font-size: 12px;
+  color: var(--ctp-red);
+}
+
+/* Password toggle */
+
+.input-with-toggle {
+  position: relative;
+}
+
+.input-with-toggle input {
+  padding-right: 40px;
+}
+
+.toggle-visibility {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--ctp-subtext0);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+}
+
+.toggle-visibility:hover {
+  color: var(--ctp-text);
+}
+
+/* Buttons */
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--ctp-mauve);
+  color: var(--ctp-base);
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background: var(--ctp-surface1);
+  color: var(--ctp-text);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--ctp-surface2);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.btn-lg {
+  padding: 12px 32px;
+  font-size: 16px;
+}
+
+/* Form actions */
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Status indicators */
+
+.status-banner {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-banner-success {
+  background: rgba(166, 227, 161, 0.1);
+  color: var(--ctp-green);
+  border: 1px solid rgba(166, 227, 161, 0.2);
+}
+
+/* Error guidance */
+
+.error-guidance {
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: rgba(243, 139, 168, 0.08);
+  border: 1px solid rgba(243, 139, 168, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.error-guidance p {
+  font-size: 13px;
+  color: var(--ctp-red);
+  line-height: 1.5;
+}
+
+/* Navigation */
+
+.onboarding-nav {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 32px;
+  margin-top: 24px;
+  border-top: 1px solid var(--ctp-surface0);
+}
+
+/* Completion */
+
+.completion-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--ctp-text);
+}
+
+.checklist-icon {
+  color: var(--ctp-green);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.completion-nudge {
+  padding: 14px;
+  border-radius: 6px;
+  background: var(--ctp-surface0);
+  border: 1px solid var(--ctp-surface1);
+}
+
+.completion-nudge p {
+  font-size: 14px;
+  color: var(--ctp-subtext1);
+  line-height: 1.6;
+}
+
+.completion-actions {
+  justify-content: center;
+  padding-top: 8px;
+}

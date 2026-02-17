@@ -347,7 +347,7 @@ async function handleSingleUrlCapture(
 
 // -- Context menu -------------------------------------------------------------
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   chrome.contextMenus.create({
     id: "save-page-to-2vault",
     title: "Save to 2Vault",
@@ -358,6 +358,12 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Save Link to 2Vault",
     contexts: ["link"],
   });
+
+  if (details?.reason === "install") {
+    chrome.tabs.create({
+      url: chrome.runtime.getURL("src/onboarding/onboarding.html"),
+    });
+  }
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -440,6 +446,14 @@ chrome.runtime.onMessage.addListener(
         sendResponse({ type: "PROCESSING_STARTED" });
       });
       return true; // Keep message channel open for async response
+    }
+
+    if (message.type === "OPEN_ONBOARDING") {
+      chrome.tabs.create({
+        url: chrome.runtime.getURL("src/onboarding/onboarding.html"),
+      });
+      sendResponse({ type: "ONBOARDING_OPENED" });
+      return false;
     }
 
     if (message.type === "CANCEL_PROCESSING") {

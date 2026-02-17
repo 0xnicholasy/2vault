@@ -8,7 +8,7 @@ import { Settings } from "./components/Settings";
 import { BookmarkBrowser } from "./components/BookmarkBrowser";
 import { ProcessingModal } from "./components/ProcessingModal";
 import { StatusTab } from "./components/StatusTab";
-import { getProcessingState, getLocalStorage } from "@/utils/storage";
+import { getProcessingState, getLocalStorage, isFirstTimeUser } from "@/utils/storage";
 import "./styles/popup.css";
 
 type Tab = "settings" | "bookmarks" | "status";
@@ -27,10 +27,23 @@ const TABS: TabDef[] = [
 ];
 
 function App() {
+  const [ready, setReady] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("bookmarks");
   const [processingState, setProcessingState] = useState<ProcessingState | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [initialUrl, setInitialUrl] = useState<string | undefined>();
+
+  // Redirect first-time users to onboarding
+  useEffect(() => {
+    isFirstTimeUser().then((firstTime) => {
+      if (firstTime) {
+        chrome.runtime.sendMessage({ type: "OPEN_ONBOARDING" });
+        window.close();
+      } else {
+        setReady(true);
+      }
+    });
+  }, []);
 
   // Check for active processing on mount
   useEffect(() => {
@@ -101,6 +114,14 @@ function App() {
   }, []);
 
   const isProcessing = processingState?.active ?? false;
+
+  if (!ready) {
+    return (
+      <div className="app">
+        <div className="placeholder">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">

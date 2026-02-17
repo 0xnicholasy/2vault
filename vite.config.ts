@@ -11,6 +11,13 @@ export default defineConfig({
       "@": resolve(__dirname, "src"),
     },
   },
+  build: {
+    rollupOptions: {
+      input: {
+        onboarding: resolve(__dirname, "src/onboarding/onboarding.html"),
+      },
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,
