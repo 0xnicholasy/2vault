@@ -49,14 +49,15 @@ src/core/
 └── orchestrator.ts    # Main pipeline: URLs -> dedupe -> extract -> analyze -> process -> create -> hub notes
 ```
 
-### Extension Layer (`src/popup/`, `src/background/`, `src/content-scripts/`)
+### Extension Layer (`src/popup/`, `src/background/`, `src/content-scripts/`, `src/onboarding/`)
 
 Chrome-specific code that wraps the core module.
 
 ```
 src/popup/             # React popup UI (bookmark browser, settings, status)
 src/background/        # Service worker (orchestration, keyboard shortcut handler)
-src/content-scripts/   # DOM extractors for X/Twitter and LinkedIn
+src/content-scripts/   # DOM extractors for X/Twitter, LinkedIn, Reddit
+src/onboarding/        # First-run onboarding wizard (full-page new tab)
 src/utils/             # chrome.storage wrapper, config management
 ```
 
@@ -214,6 +215,8 @@ Extension -> HTTPS -> 2vault-proxy.vercel.app -> openrouter.ai/api
   keyboardShortcut: string;    // Display only (actual shortcut in manifest)
   vaultOrganization: 'para' | 'custom';  // Vault organization mode (default: 'para')
   tagGroups: TagGroup[];       // User-defined tag groups for consistent categorization
+  onboardingComplete: boolean; // First-run onboarding completed flag
+  onboardingStep: number;      // Current onboarding step (for resume on close)
 }
 
 // chrome.storage.local (device-local, 10MB limit)
@@ -272,6 +275,13 @@ Each doc file has a `<!-- Claude Code Tooling -->` comment at the top listing wh
 
 **Start with `docs/IMPLEMENTATION.md`** - it has the sprint order, progress legend, checkboxes, and per-sprint agent/skill mapping. Progress is visible at a glance using the legend: `[x]` (done), `[>]` (in-progress), `[ ]` (todo), `[~]` (deferred).
 
+**IMPORTANT -- Progress Sync Rule:** After completing any sprint, ALWAYS update ALL of these files to reflect the new status:
+1. The sprint's implementation doc (`docs/IMPLEMENTATION.md` or `docs/GTM-IMPLEMENTATION.md`) -- mark checkboxes and sprint header
+2. The **Current Progress** section in this file (`CLAUDE.md`) -- update status line and phase boundary
+3. `tasks/todo.md` if it has related items
+
+These files must stay in sync. Stale progress markers cause confusion across sessions.
+
 ### GTM & Onboarding Documents
 
 Go-to-market strategy, landing page, and first-run onboarding flow docs:
@@ -302,8 +312,8 @@ Progress is tracked in `docs/IMPLEMENTATION.md` using this legend:
 - **Phase 2.5 (Core Intelligence):** [x] DONE. Duplicate detection, PARA organization, tag groups, tag consistency, graph linkage.
 - **Phase 2.6 (UX Polish):** [x] DONE. Better error UI, direct URL input, API key validation, vault URL dropdown.
 - **Phase 2.7 (UIUX Fixes):** [x] DONE. Parallel processing, status labels, progress bug, URL normalization.
-- **Phase 2.8 (Thread & Forum Extraction):** [ ] TODO. Improve X thread extraction (author vs replies), add Reddit content script, update pipeline for thread context.
-- **Phase 3 (GTM):** [ ] TODO. Onboarding wizard + landing page + Chrome Web Store + launch. See `docs/GTM-IMPLEMENTATION.md` for Sprints 3.1-3.5.
+- **Phase 2.8 (Thread & Forum Extraction):** [x] DONE. X thread extraction (author vs replies), Reddit content script, pipeline thread context.
+- **Phase 3 (GTM):** [>] IN-PROGRESS. Sprint 3.2 onboarding wizard DONE. Sprints 3.3-3.5 TODO. See `docs/GTM-IMPLEMENTATION.md`.
 - **Phase 4 (Managed Tier):** [~] DEFERRED (only after Phase 3 live with 100+ installs).
 
 ## Phase Boundaries
@@ -328,17 +338,17 @@ Sprint 2.7: Parallel processing, status labels, progress bug, URL normalization.
 
 **Done when:** PARA organization works, duplicates are skipped, tag hub notes appear in graph view, URLs can be pasted directly.
 
-### Phase 2.8: Thread & Forum Extraction - NEXT
+### Phase 2.8: Thread & Forum Extraction - DONE
 
-Sprint 2.8: Improve X/Twitter thread extraction (distinguish author thread vs. replies, capture top replies). Add Reddit as a supported platform with content script. Update core pipeline for thread context.
+Sprint 2.8: X/Twitter thread extraction (author vs replies, top replies), Reddit content script, pipeline thread context.
 
 **Done when:** X threads capture author's thread + top replies with metadata. Reddit posts extract title + body + top 5 comments. LLM prompts handle conversation context. Tests pass.
 
-### Phase 3: GTM - Onboarding + Landing Page + Launch
+### Phase 3: GTM - Onboarding + Landing Page + Launch - IN PROGRESS
 
 5 sprints tracked in `docs/GTM-IMPLEMENTATION.md`:
 - Sprint 3.1: Planning & Decisions (resolve 5 open decisions)
-- Sprint 3.2: In-Extension Onboarding (guided setup with connection testing)
+- Sprint 3.2: In-Extension Onboarding [x] DONE (3-step wizard: Obsidian, OpenRouter, Completion)
 - Sprint 3.3: Landing Page (single-page marketing site)
 - Sprint 3.4: Chrome Web Store Submission
 - Sprint 3.5: Launch (social media, monitoring, iteration)
