@@ -272,6 +272,22 @@ Each doc file has a `<!-- Claude Code Tooling -->` comment at the top listing wh
 
 **Start with `docs/IMPLEMENTATION.md`** - it has the sprint order, progress legend, checkboxes, and per-sprint agent/skill mapping. Progress is visible at a glance using the legend: `[x]` (done), `[>]` (in-progress), `[ ]` (todo), `[~]` (deferred).
 
+### GTM & Onboarding Documents
+
+Go-to-market strategy, landing page, and first-run onboarding flow docs:
+
+| Document | Purpose | When to Use |
+|----------|---------|-------------|
+| `docs/GTM-IMPLEMENTATION.md` | **Sprint-based implementation plan** (same format as IMPLEMENTATION.md) | **Start here for GTM build work** - sprint order, checkboxes, dependencies |
+| `docs/GTM-STRATEGY-SUMMARY.md` | High-level GTM decisions, messaging, metrics | Product strategy, positioning, success metrics |
+| `docs/LANDING-PAGE-COPY.md` | Ready-to-use copy (headlines, CTAs, FAQ, A/B variants) | Writing landing page content, Chrome Web Store listing |
+| `docs/LANDING-ONBOARDING-FLOW-DIAGRAMS.md` | ASCII mockups, user journey swimlanes, state flows | UI design reference for onboarding wizard and landing page layout |
+| `docs/REFERENCE-EXAMPLES.md` | Analysis of Raycast, Linear, Notion, Stripe onboarding | Design inspiration, competitive patterns |
+| `docs/GTM-LANDING-ONBOARDING.md` | Full landing page + onboarding strategy spec | Deep reference for implementation details |
+| `docs/README-GTM.md` | Navigation guide for all GTM docs | Overview of all GTM documents |
+
+**Resolved decisions:** New tab onboarding (`chrome-extension://id/onboarding.html`), Vite + React SPA landing page, 3-step onboarding (Obsidian, OpenRouter, Done), `2vault.dev` domain, no analytics at launch. See `docs/GTM-IMPLEMENTATION.md` for full details.
+
 ## Current Progress
 
 Progress is tracked in `docs/IMPLEMENTATION.md` using this legend:
@@ -285,7 +301,8 @@ Progress is tracked in `docs/IMPLEMENTATION.md` using this legend:
 - **Phase 2 (Extension):** Sprints 2.1-2.4 [x] DONE.
 - **Phase 2.5 (Core Intelligence):** [ ] TODO. Duplicate detection, PARA organization, tag groups, tag consistency, graph linkage.
 - **Phase 2.6 (UX Polish):** [ ] TODO. Better error UI, direct URL input, API key validation, vault URL dropdown.
-- **Phase 3 (Managed Tier):** [~] DEFERRED (only after Phase 2 live with 100+ installs).
+- **Phase 3 (GTM):** [ ] TODO. Onboarding wizard + landing page + Chrome Web Store + launch. See `docs/GTM-IMPLEMENTATION.md` for Sprints 3.1-3.5.
+- **Phase 4 (Managed Tier):** [~] DEFERRED (only after Phase 3 live with 100+ installs).
 
 ## Phase Boundaries
 
@@ -308,11 +325,22 @@ Sprint 2.6: Better error UI, direct URL input, API key validation, vault URL dro
 
 **Done when:** PARA organization works, duplicates are skipped, tag hub notes appear in graph view, URLs can be pasted directly.
 
-### Phase 3 (Future): Managed Tier
+### Phase 3: GTM - Onboarding + Landing Page + Launch - NEXT
+
+5 sprints tracked in `docs/GTM-IMPLEMENTATION.md`:
+- Sprint 3.1: Planning & Decisions (resolve 5 open decisions)
+- Sprint 3.2: In-Extension Onboarding (guided setup with connection testing)
+- Sprint 3.3: Landing Page (single-page marketing site)
+- Sprint 3.4: Chrome Web Store Submission
+- Sprint 3.5: Launch (social media, monitoring, iteration)
+
+**Done when:** Extension on Chrome Web Store, landing page live, >100 installs in week 1.
+
+### Phase 4 (Future): Managed Tier
 
 Serverless proxy, Stripe, additional LLM providers, Facebook/Instagram.
 
-**Only start after:** Phase 2 live with 100+ Chrome Web Store installs.
+**Only start after:** Phase 3 live with 100+ Chrome Web Store installs.
 
 ## Agent & Skill Guide
 
@@ -334,6 +362,7 @@ When working on this project, use these specialized tools. Each `docs/*.md` file
 | `pr-review-toolkit:review-pr` | Comprehensive PR review before merging |
 | `claude-md-management:revise-claude-md` | Update this file with session learnings |
 | `sprint-execute` | Full sprint implementation loop: plan, build, verify, fix, commit, update progress |
+| `interactive-portfolio` | Landing page design patterns, conversion optimization |
 
 ### Agents (invoke via Task tool)
 
@@ -346,6 +375,9 @@ When working on this project, use these specialized tools. Each `docs/*.md` file
 | `pr-review-toolkit:type-design-analyzer` | After adding new types/interfaces |
 | `pr-review-toolkit:pr-test-analyzer` | After writing tests - coverage gap analysis |
 | `cofounder` | Product strategy decisions, roadmap pivots |
+| `product-manager` | GTM strategy, onboarding UX, landing page content, launch planning |
+| `ui-designer` | Onboarding wizard UI, landing page visual design |
+| `frontend-developer` | Landing page implementation, onboarding tab UI |
 
 
 <claude-mem-context>
