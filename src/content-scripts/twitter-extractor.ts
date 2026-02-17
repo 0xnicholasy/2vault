@@ -195,6 +195,26 @@ function fallbackExtraction(url: string, reason: string): ExtractedContent {
   };
 }
 
+const TWEET_POLL_INTERVAL_MS = 500;
+const TWEET_POLL_TIMEOUT_MS = 10_000;
+
+/**
+ * Poll for tweet article element to appear in the DOM.
+ * Twitter/X uses React hydration which may not have rendered the tweet
+ * by the time the tab "complete" event fires.
+ */
+async function waitForTweetElement(): Promise<Element | null> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < TWEET_POLL_TIMEOUT_MS) {
+    const article = document.querySelector(SELECTORS.tweet);
+    if (article) return article;
+    await new Promise((resolve) => setTimeout(resolve, TWEET_POLL_INTERVAL_MS));
+  }
+
+  return null;
+}
+
 // Listen for extraction requests from service worker
 chrome.runtime.onMessage.addListener(
   (
@@ -203,10 +223,14 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response: ExtractionResultMessage) => void
   ) => {
     if (message.type === "EXTRACT_CONTENT") {
-      const result = extractFromDom();
-      sendResponse({ type: "EXTRACTION_RESULT", data: result });
+      // Async handler: wait for tweet DOM to hydrate before extracting
+      waitForTweetElement().then(() => {
+        const result = extractFromDom();
+        sendResponse({ type: "EXTRACTION_RESULT", data: result });
+      });
+      return true; // Keep message channel open for async response
     }
-    return false; // Synchronous response
+    return false;
   }
 );
 
@@ -222,6 +246,7 @@ export {
   extractThread,
   extractSingleTweet,
   fallbackExtraction,
+  waitForTweetElement,
   SELECTORS,
   SELECTOR_VERSION,
 };

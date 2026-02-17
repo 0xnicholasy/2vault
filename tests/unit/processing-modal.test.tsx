@@ -33,9 +33,10 @@ function makeState(overrides: Partial<ProcessingState> = {}): ProcessingState {
     active: true,
     urls: ["https://example.com/1", "https://example.com/2"],
     results: [],
-    currentIndex: 0,
-    currentUrl: "https://example.com/1",
-    currentStatus: "extracting",
+    urlStatuses: {
+      "https://example.com/1": "extracting",
+      "https://example.com/2": "queued",
+    },
     startedAt: Date.now(),
     cancelled: false,
     ...overrides,
@@ -65,9 +66,11 @@ describe("ProcessingModal", () => {
     const state = makeState({
       urls: ["https://example.com/1", "https://example.com/2", "https://example.com/3"],
       results: [makeResult("https://example.com/1", "success")],
-      currentIndex: 1,
-      currentUrl: "https://example.com/2",
-      currentStatus: "extracting",
+      urlStatuses: {
+        "https://example.com/1": "done",
+        "https://example.com/2": "extracting",
+        "https://example.com/3": "queued",
+      },
     });
 
     render(<ProcessingModal initialState={state} onClose={vi.fn()} />);
@@ -148,9 +151,11 @@ describe("ProcessingModal", () => {
         makeResult("https://example.com/1", "success"),
         makeResult("https://example.com/2", "failed"),
       ],
-      currentIndex: 2,
-      currentUrl: "https://example.com/3",
-      currentStatus: "extracting",
+      urlStatuses: {
+        "https://example.com/1": "done",
+        "https://example.com/2": "failed",
+        "https://example.com/3": "extracting",
+      },
       active: true,
     });
 
@@ -171,10 +176,10 @@ describe("ProcessingModal", () => {
       expect(row.querySelector(".status-icon")).toBeInTheDocument();
     });
 
-    // Each row has a status label
-    expect(screen.getByText("done")).toBeInTheDocument();
-    expect(screen.getByText("failed")).toBeInTheDocument();
-    expect(screen.getByText("extracting")).toBeInTheDocument();
+    // Each row has a human-readable status label
+    expect(screen.getByText("Done")).toBeInTheDocument();
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.getByText("Reading")).toBeInTheDocument();
   });
 
   it("shows batch error banner when state.error is set", () => {
@@ -203,6 +208,11 @@ describe("ProcessingModal", () => {
         makeResult("https://example.com/2", "success"),
         makeResult("https://example.com/3", "failed", { error: "timeout" }),
       ],
+      urlStatuses: {
+        "https://example.com/1": "done",
+        "https://example.com/2": "done",
+        "https://example.com/3": "failed",
+      },
     });
 
     render(<ProcessingModal initialState={state} onClose={vi.fn()} />);

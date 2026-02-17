@@ -44,9 +44,10 @@ function makeState(overrides: Partial<ProcessingState> = {}): ProcessingState {
     active: true,
     urls: ["https://example.com/1", "https://example.com/2"],
     results: [],
-    currentIndex: 0,
-    currentUrl: "https://example.com/1",
-    currentStatus: "extracting",
+    urlStatuses: {
+      "https://example.com/1": "extracting",
+      "https://example.com/2": "queued",
+    },
     startedAt: Date.now(),
     cancelled: false,
     ...overrides,
@@ -61,6 +62,10 @@ describe("ProcessingStatus", () => {
   it("renders progress bar with correct percentage", () => {
     const state = makeState({
       results: [{ url: "https://example.com/1", status: "success", note: makeNote() }],
+      urlStatuses: {
+        "https://example.com/1": "done",
+        "https://example.com/2": "extracting",
+      },
     });
 
     render(<ProcessingStatus state={state} vaultName="" onCancel={vi.fn()} />);
@@ -76,6 +81,10 @@ describe("ProcessingStatus", () => {
         { url: "https://example.com/1", status: "success", note: makeNote() },
         { url: "https://example.com/2", status: "failed", error: "Timeout" },
       ],
+      urlStatuses: {
+        "https://example.com/1": "done",
+        "https://example.com/2": "failed",
+      },
     });
 
     render(<ProcessingStatus state={state} vaultName="" onCancel={vi.fn()} />);

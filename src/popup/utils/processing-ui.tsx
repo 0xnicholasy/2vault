@@ -25,19 +25,24 @@ export function StatusIcon({ status }: { status: UrlStatus }) {
 
 export function getUrlStatus(
   url: string,
-  index: number,
   state: ProcessingState
 ): UrlStatus {
-  const result = state.results.find((r) => r.url === url);
-  if (result) {
-    if (result.status === "success") return "done";
-    if (result.status === "skipped") return "skipped";
-    return "failed";
-  }
-  if (index === state.currentIndex && state.active) {
-    return state.currentStatus;
-  }
-  return "queued";
+  return state.urlStatuses[url] ?? "queued";
+}
+
+const STATUS_LABELS: Record<UrlStatus, string> = {
+  queued: "Queued",
+  checking: "Checking",
+  extracting: "Reading",
+  processing: "Summarizing",
+  creating: "Saving",
+  done: "Done",
+  failed: "Failed",
+  skipped: "Skipped",
+};
+
+export function statusDisplayLabel(status: UrlStatus): string {
+  return STATUS_LABELS[status];
 }
 
 export function formatUrl(url: string): string {

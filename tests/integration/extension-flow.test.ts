@@ -355,13 +355,16 @@ describe("Integration: popup -> service-worker round trips", () => {
     });
 
     // Store a mock active state so CANCEL_PROCESSING handler can read it
+    const urlStatuses: Record<string, string> = {};
+    for (const u of urls) {
+      urlStatuses[u] = "queued";
+    }
+    urlStatuses[urls[0]!] = "extracting";
     const activeState: ProcessingState = {
       active: true,
       urls,
       results: [],
-      currentIndex: 0,
-      currentUrl: urls[0]!,
-      currentStatus: "extracting",
+      urlStatuses: urlStatuses as Record<string, import("@/background/messages").UrlStatus>,
       startedAt: Date.now(),
       cancelled: false,
     };
@@ -461,9 +464,7 @@ describe("Integration: popup -> service-worker round trips", () => {
       active: true,
       urls: ["https://example.com/running"],
       results: [],
-      currentIndex: 0,
-      currentUrl: "https://example.com/running",
-      currentStatus: "extracting",
+      urlStatuses: { "https://example.com/running": "extracting" },
       startedAt: Date.now(),
       cancelled: false,
     } satisfies ProcessingState);

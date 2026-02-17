@@ -154,10 +154,17 @@ export class VaultClient {
   }
 
   async listFolders(): Promise<string[]> {
-    const rootListing = await this.request<VaultListResponse>(
-      "GET",
-      "/vault/"
-    );
+    let rootListing: VaultListResponse;
+    try {
+      rootListing = await this.request<VaultListResponse>("GET", "/vault/");
+    } catch (err) {
+      // v3.4.3 bug: GET /vault/ returns 404 on HTTP endpoint.
+      // Fall back to empty folder list - notes will use defaultFolder.
+      if (err instanceof VaultClientError && err.statusCode === 404) {
+        return [];
+      }
+      throw err;
+    }
 
     const folderSet = new Set<string>();
 
@@ -235,21 +242,13 @@ export class VaultClient {
   }
 
   async searchNotes(query: string): Promise<SearchResult[]> {
-    const raw = await this.requestText(
-      "POST",
-      "/search/simple/",
-      query,
-      "text/plain"
-    );
+    // v3.4+ requires query as URL parameter, not body text
+    const encoded = encodeURIComponent(query);
+    const results = await this.request<
+      Array<{ filename: string; score: number }>
+    >("POST", `/search/simple/?query=${encoded}`);
 
-    // The search endpoint returns JSON despite our text/markdown Accept header
-    // Parse the JSON array of search results
-    try {
-      const parsed = JSON.parse(raw) as Array<{ filename: string; score: number }>;
-      return parsed.map((r) => ({ filename: r.filename, score: r.score }));
-    } catch {
-      return [];
-    }
+    return results.map((r) => ({ filename: r.filename, score: r.score }));
   }
 
   async readNote(path: string): Promise<string> {
@@ -269,48 +268,10 @@ export class VaultClient {
   }
 
   async appendToNote(path: string, content: string): Promise<void> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    let response: Response;
-    try {
-      response = await fetch(
-        `${this.baseUrl}/vault/${encodeVaultPath(path)}`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-            "Content-Type": "text/markdown",
-          },
-          body: content,
-          signal: controller.signal,
-        }
-      );
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        throw new VaultClientError(
-          `Request timed out: PATCH /vault/${path}`,
-          null,
-          `/vault/${path}`
-        );
-      }
-      const message = err instanceof Error ? err.message : "Unknown error";
-      throw new VaultClientError(
-        `Network error: ${message}`,
-        null,
-        `/vault/${path}`
-      );
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    if (!response.ok) {
-      throw new VaultClientError(
-        `HTTP ${response.status}: PATCH /vault/${path}`,
-        response.status,
-        `/vault/${path}`
-      );
-    }
+    // v3.4+ PATCH requires Target-Type header and doesn't support simple append.
+    // Use read + PUT (overwrite) to append content instead.
+    const existing = await this.readNote(path);
+    await this.createNote(path, existing + content);
   }
 
   async createNote(path: string, content: string): Promise<void> {

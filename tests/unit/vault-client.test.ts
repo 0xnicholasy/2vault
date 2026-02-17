@@ -404,9 +404,19 @@ describe("VaultClient path encoding", () => {
 // -- Error handling -----------------------------------------------------------
 
 describe("VaultClient error handling", () => {
-  it("throws VaultClientError with statusCode on HTTP errors", async () => {
+  it("returns empty array on 404 from listFolders (v3.4.3 HTTP fallback)", async () => {
     mockFetch.mockResolvedValue(
       new Response("Not found", { status: 404 })
+    );
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    const folders = await client.listFolders();
+    expect(folders).toEqual([]);
+  });
+
+  it("throws VaultClientError on non-404 HTTP errors from listFolders", async () => {
+    mockFetch.mockResolvedValue(
+      new Response("Server error", { status: 500 })
     );
     const client = new VaultClient(VAULT_URL, API_KEY);
 
@@ -416,8 +426,7 @@ describe("VaultClient error handling", () => {
     } catch (err) {
       expect(err).toBeInstanceOf(VaultClientError);
       const vaultErr = err as VaultClientError;
-      expect(vaultErr.statusCode).toBe(404);
-      expect(vaultErr.endpoint).toBe("/vault/");
+      expect(vaultErr.statusCode).toBe(500);
     }
   });
 
@@ -459,35 +468,27 @@ describe("VaultClient error handling", () => {
 // -- searchNotes --------------------------------------------------------------
 
 describe("VaultClient.searchNotes", () => {
-  it("sends POST with query as text/plain body", async () => {
+  it("sends POST with query as URL parameter (v3.4+ format)", async () => {
     mockFetch.mockResolvedValue(
-      new Response(JSON.stringify([{ filename: "Inbox/note.md", score: 1.0 }]), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })
+      jsonResponse([{ filename: "Inbox/note.md", score: 1.0 }])
     );
     const client = new VaultClient(VAULT_URL, API_KEY);
 
     const results = await client.searchNotes("https://example.com/article");
 
     const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain("/search/simple/");
+    expect(url).toContain("/search/simple/?query=");
+    expect(url).toContain(encodeURIComponent("https://example.com/article"));
     expect(options.method).toBe("POST");
-    expect(options.body).toBe("https://example.com/article");
     expect(results).toHaveLength(1);
     expect(results[0]!.filename).toBe("Inbox/note.md");
   });
 
-  it("returns empty array on invalid JSON response", async () => {
-    mockFetch.mockResolvedValue(
-      new Response("not json", {
-        status: 200,
-        headers: { "content-type": "text/plain" },
-      })
-    );
+  it("returns empty array on empty search results", async () => {
+    mockFetch.mockResolvedValue(jsonResponse([]));
     const client = new VaultClient(VAULT_URL, API_KEY);
 
-    const results = await client.searchNotes("query");
+    const results = await client.searchNotes("nonexistent");
 
     expect(results).toEqual([]);
   });
@@ -549,27 +550,37 @@ describe("VaultClient.noteExists", () => {
 // -- appendToNote -------------------------------------------------------------
 
 describe("VaultClient.appendToNote", () => {
-  it("sends PATCH with text/markdown content", async () => {
-    mockFetch.mockResolvedValue(new Response(null, { status: 200 }));
-    const client = new VaultClient(VAULT_URL, API_KEY);
+  it("reads existing content then overwrites with appended content (v3.4+ compat)", async () => {
+    const existingContent = "# Hub: ai\n- [[old-note]]";
+    mockFetch
+      // First call: readNote (GET)
+      .mockResolvedValueOnce(new Response(existingContent, { status: 200 }))
+      // Second call: createNote (PUT)
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
 
+    const client = new VaultClient(VAULT_URL, API_KEY);
     await client.appendToNote("Tags/ai.md", "\n- [[new-note]]");
 
-    const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain("/vault/Tags/ai.md");
-    expect(options.method).toBe("PATCH");
-    expect(options.body).toBe("\n- [[new-note]]");
-    expect(
-      (options.headers as Record<string, string>)["Content-Type"]
-    ).toBe("text/markdown");
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    // First call: GET to read existing content
+    const [readUrl, readOptions] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(readUrl).toContain("/vault/Tags/ai.md");
+    expect(readOptions.method).toBe("GET");
+
+    // Second call: PUT with combined content
+    const [writeUrl, writeOptions] = mockFetch.mock.calls[1] as [string, RequestInit];
+    expect(writeUrl).toContain("/vault/Tags/ai.md");
+    expect(writeOptions.method).toBe("PUT");
+    expect(writeOptions.body).toBe("# Hub: ai\n- [[old-note]]\n- [[new-note]]");
   });
 
-  it("throws VaultClientError on HTTP error", async () => {
-    mockFetch.mockResolvedValue(new Response("Forbidden", { status: 403 }));
+  it("throws VaultClientError on read failure", async () => {
+    mockFetch.mockResolvedValue(new Response("Not found", { status: 404 }));
     const client = new VaultClient(VAULT_URL, API_KEY);
 
     await expect(
-      client.appendToNote("Tags/ai.md", "content")
+      client.appendToNote("Tags/missing.md", "content")
     ).rejects.toThrow(VaultClientError);
   });
 });

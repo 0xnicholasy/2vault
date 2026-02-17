@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { IoChevronDown, IoChevronForward, IoOpenOutline } from "react-icons/io5";
 import type { ProcessingState } from "@/background/messages.ts";
-import { StatusIcon, getUrlStatus, formatUrl, buildObsidianUri } from "@/popup/utils/processing-ui";
+import { StatusIcon, getUrlStatus, formatUrl, buildObsidianUri, statusDisplayLabel } from "@/popup/utils/processing-ui";
 
 interface ProcessingStatusProps {
   state: ProcessingState;
@@ -12,11 +12,12 @@ interface ProcessingStatusProps {
 export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatusProps) {
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
 
-  const completed = state.results.length;
+  const TERMINAL_STATUSES = new Set(["done", "failed", "skipped"]);
   const total = state.urls.length;
-  const successCount = state.results.filter((r) => r.status === "success").length;
-  const failedCount = state.results.filter((r) => r.status === "failed").length;
-  const skippedCount = state.results.filter((r) => r.status === "skipped").length;
+  const completed = state.urls.filter((url) => TERMINAL_STATUSES.has(state.urlStatuses[url] ?? "queued")).length;
+  const successCount = state.urls.filter((url) => state.urlStatuses[url] === "done").length;
+  const failedCount = state.urls.filter((url) => state.urlStatuses[url] === "failed").length;
+  const skippedCount = state.urls.filter((url) => state.urlStatuses[url] === "skipped").length;
   const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
   const isDone = !state.active;
 
@@ -63,7 +64,7 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
 
       <div className="url-status-list">
         {state.urls.map((url, index) => {
-          const status = getUrlStatus(url, index, state);
+          const status = getUrlStatus(url, state);
           const result = state.results.find((r) => r.url === url);
           const hasError = result?.status === "failed" && result.error;
           const isExpanded = expandedErrors.has(url);
@@ -74,6 +75,7 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
               <div className="url-status-main">
                 <StatusIcon status={status} />
                 <span className="url-status-text">{formatUrl(url)}</span>
+                <span className="url-status-label">{statusDisplayLabel(status)}</span>
                 {hasError && (
                   <button
                     className="error-toggle"

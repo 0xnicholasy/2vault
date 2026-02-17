@@ -488,6 +488,49 @@ Wrap the validated core module in a Chrome Manifest V3 extension.
 - [x] Preserve backward compatibility: if stored URL doesn't match a preset, select "Custom..."
 - [x] Add component tests for dropdown + custom input behavior
 
+### Sprint 2.7: UIUX Fixes - Parallel Processing, Status Labels, Progress Bug [DONE]
+
+**Goal:** Fix 6 interconnected UIUX issues found during manual testing: parallel processing, status labels, progress bar bug, duplicate detection, X extraction stability.
+
+#### 2.7.1 Parallel Processing + Progress Fix
+
+- [x] Restructure `ProcessingState` in `messages.ts`: replace `currentIndex/currentUrl/currentStatus` with `urlStatuses: Record<string, UrlStatus>`
+- [x] New `ProgressCallback` signature: `(url: string, status: string) => void` (remove index/total)
+- [x] Implement `processWithConcurrency()` worker pool in `orchestrator.ts` (concurrency=5)
+- [x] Add `isCancelled` parameter for graceful cancellation
+- [x] Track hub note tags in `Set<string>` to prevent race conditions
+- [x] Update service worker: `MAX_CONCURRENT_TABS=5`, `onProgress` writes `urlStatuses`
+- [x] Fix progress bar: count terminal statuses from `urlStatuses` map instead of `results.length`
+
+#### 2.7.2 Human-Readable Status Labels
+
+- [x] Add `statusDisplayLabel()` mapping in `processing-ui.tsx`
+- [x] Show labels in `ProcessingStatus.tsx` and `ProcessingModal.tsx`
+
+#### 2.7.3 URL Normalization for Duplicate Detection
+
+- [x] Add `normalizeUrl()`: strip tracking params, normalize protocol/www/trailing slash
+- [x] Apply normalization in `checkDuplicate()` for both incoming and stored URLs
+- [x] Use `hostname + pathname` as search query
+
+#### 2.7.4 X/Twitter Extraction Stability
+
+- [x] Add `waitForTweetElement()` DOM polling (500ms interval, 10s timeout)
+- [x] Make content script message listener async (`return true`)
+- [x] Fallback to `extractFromDom()` on timeout
+
+#### 2.7.5 Test Updates
+
+- [x] Update `ProgressCallback` mock assertions in orchestrator tests
+- [x] Add `normalizeUrl` unit tests
+- [x] Add cancellation test with `isCancelled`
+- [x] Add parallel processing verification test
+
+#### 2.7.6 Manual Testing with X Posts
+
+- [ ] Test 5 X post URLs for extraction completeness
+- [ ] Re-process same URLs to verify duplicate detection
+
 ---
 
 ## Phase 3: Managed Tier + Growth (Future) [DEFERRED]

@@ -2,7 +2,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
 import type { ProcessingState } from "@/background/messages";
-import type { ProcessingResult } from "@/core/types";
 
 vi.stubGlobal("chrome", {
   storage: {
@@ -25,9 +24,10 @@ function makeState(overrides: Partial<ProcessingState> = {}): ProcessingState {
     active: true,
     urls: ["https://example.com/1", "https://example.com/2"],
     results: [],
-    currentIndex: 0,
-    currentUrl: "https://example.com/1",
-    currentStatus: "extracting",
+    urlStatuses: {
+      "https://example.com/1": "extracting",
+      "https://example.com/2": "queued",
+    },
     startedAt: Date.now(),
     cancelled: false,
     ...overrides,
@@ -78,71 +78,58 @@ describe("formatUrl", () => {
 });
 
 describe("getUrlStatus", () => {
-  it('returns "done" when results contain a success entry for the URL', () => {
-    const results: ProcessingResult[] = [
-      { url: "https://example.com/1", status: "success" },
-    ];
-    const state = makeState({ results });
+  it("returns status from urlStatuses map for a known URL", () => {
+    const state = makeState({
+      urlStatuses: {
+        "https://example.com/1": "done",
+        "https://example.com/2": "queued",
+      },
+    });
 
-    const status = getUrlStatus("https://example.com/1", 0, state);
+    const status = getUrlStatus("https://example.com/1", state);
     expect(status).toBe("done");
   });
 
-  it('returns "failed" when results contain a failed entry for the URL', () => {
-    const results: ProcessingResult[] = [
-      { url: "https://example.com/1", status: "failed", error: "Timeout" },
-    ];
-    const state = makeState({ results });
+  it('returns "failed" when urlStatuses has failed for the URL', () => {
+    const state = makeState({
+      urlStatuses: {
+        "https://example.com/1": "failed",
+        "https://example.com/2": "queued",
+      },
+    });
 
-    const status = getUrlStatus("https://example.com/1", 0, state);
+    const status = getUrlStatus("https://example.com/1", state);
     expect(status).toBe("failed");
   });
 
-  it("returns currentStatus when URL is at currentIndex and state is active", () => {
+  it("returns the active processing status for the URL", () => {
     const state = makeState({
-      currentIndex: 1,
-      currentStatus: "processing",
-      active: true,
+      urlStatuses: {
+        "https://example.com/1": "done",
+        "https://example.com/2": "processing",
+      },
     });
 
-    const status = getUrlStatus("https://example.com/2", 1, state);
+    const status = getUrlStatus("https://example.com/2", state);
     expect(status).toBe("processing");
   });
 
-  it('returns "queued" for an unprocessed URL that is not the current index', () => {
+  it('returns "queued" for a URL not in urlStatuses map', () => {
     const state = makeState({
-      currentIndex: 0,
-      active: true,
+      urlStatuses: {
+        "https://example.com/1": "extracting",
+      },
     });
 
-    const status = getUrlStatus("https://example.com/2", 1, state);
+    const status = getUrlStatus("https://example.com/unknown", state);
     expect(status).toBe("queued");
   });
 
-  it('returns "queued" when URL is at currentIndex but state is not active', () => {
-    const state = makeState({
-      currentIndex: 1,
-      active: false,
-    });
+  it('returns "queued" for URL with no entry in urlStatuses', () => {
+    const state = makeState({ urlStatuses: {} });
 
-    const status = getUrlStatus("https://example.com/2", 1, state);
+    const status = getUrlStatus("https://example.com/2", state);
     expect(status).toBe("queued");
-  });
-
-  it("prioritizes result lookup over currentIndex match", () => {
-    const results: ProcessingResult[] = [
-      { url: "https://example.com/1", status: "success" },
-    ];
-    const state = makeState({
-      results,
-      currentIndex: 0,
-      currentStatus: "creating",
-      active: true,
-    });
-
-    // Even though index matches and state is active, the result takes priority
-    const status = getUrlStatus("https://example.com/1", 0, state);
-    expect(status).toBe("done");
   });
 });
 

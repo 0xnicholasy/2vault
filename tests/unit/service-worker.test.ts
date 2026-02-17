@@ -243,9 +243,7 @@ describe("Service worker - message handling", () => {
       active: true,
       urls: ["https://example.com"],
       results: [],
-      currentIndex: 0,
-      currentUrl: "https://example.com",
-      currentStatus: "extracting",
+      urlStatuses: { "https://example.com": "extracting" },
       startedAt: Date.now(),
       cancelled: false,
     });
@@ -551,7 +549,8 @@ describe("Service worker - isSocialMediaUrl", () => {
         TEST_CONFIG,
         expect.anything(),
         expect.any(Function),
-        expect.any(Function) // smartExtract passed as extractFn
+        expect.any(Function), // smartExtract passed as extractFn
+        expect.any(Function)  // isCancelled callback
       );
     });
   });
@@ -575,11 +574,12 @@ describe("Service worker - tab-based DOM extraction", () => {
       });
     });
 
-    // processUrls should be called with an extractFn (5th arg)
+    // processUrls should be called with an extractFn (5th arg) and isCancelled (6th arg)
     expect(mockProcessUrls).toHaveBeenCalledWith(
       ["https://linkedin.com/posts/test"],
       expect.anything(),
       expect.anything(),
+      expect.any(Function),
       expect.any(Function),
       expect.any(Function)
     );

@@ -16,9 +16,7 @@ export interface ProcessingState {
   active: boolean;
   urls: string[];
   results: ProcessingResult[];
-  currentIndex: number;
-  currentUrl: string;
-  currentStatus: UrlStatus;
+  urlStatuses: Record<string, UrlStatus>;
   startedAt: number;
   cancelled: boolean;
   error?: string;

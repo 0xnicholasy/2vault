@@ -57,7 +57,7 @@ vi.mock("@/core/note-formatter", () => ({
   formatTagHubNote: mockFormatTagHubNote,
 }));
 
-import { processUrls, type ProgressCallback, type ExtractFn } from "@/core/orchestrator";
+import { processUrls, normalizeUrl, type ProgressCallback, type ExtractFn } from "@/core/orchestrator";
 
 const TEST_CONFIG: Config = {
   apiKey: "test-api-key",
@@ -208,33 +208,26 @@ describe("processUrls - progress callbacks", () => {
     expect(statuses).toEqual(["checking", "extracting", "processing", "creating", "done"]);
   });
 
-  it("reports correct index and total", async () => {
+  it("reports url with each status callback", async () => {
     const urls = ["https://example.com/a", "https://example.com/b"];
-    const calls: Array<{ index: number; total: number }> = [];
+    const calls: Array<{ url: string; status: string }> = [];
 
     mockFetchAndExtract
       .mockResolvedValueOnce(createExtracted({ url: urls[0] }))
       .mockResolvedValueOnce(createExtracted({ url: urls[1] }));
 
-    const onProgress: ProgressCallback = (_url, _status, index, total) => {
-      calls.push({ index, total });
+    const onProgress: ProgressCallback = (url, status) => {
+      calls.push({ url, status });
     };
 
     await processUrls(urls, TEST_CONFIG, createMockProvider(), onProgress);
 
-    // First URL: index 0, total 2 (5 callbacks: checking, extracting, processing, creating, done)
-    expect(calls[0]).toEqual({ index: 0, total: 2 });
-    expect(calls[1]).toEqual({ index: 0, total: 2 });
-    expect(calls[2]).toEqual({ index: 0, total: 2 });
-    expect(calls[3]).toEqual({ index: 0, total: 2 });
-    expect(calls[4]).toEqual({ index: 0, total: 2 });
+    // Each URL should get its own set of status callbacks
+    const url1Calls = calls.filter((c) => c.url === urls[0]);
+    const url2Calls = calls.filter((c) => c.url === urls[1]);
 
-    // Second URL: index 1, total 2 (5 callbacks)
-    expect(calls[5]).toEqual({ index: 1, total: 2 });
-    expect(calls[6]).toEqual({ index: 1, total: 2 });
-    expect(calls[7]).toEqual({ index: 1, total: 2 });
-    expect(calls[8]).toEqual({ index: 1, total: 2 });
-    expect(calls[9]).toEqual({ index: 1, total: 2 });
+    expect(url1Calls.map((c) => c.status)).toEqual(["checking", "extracting", "processing", "creating", "done"]);
+    expect(url2Calls.map((c) => c.status)).toEqual(["checking", "extracting", "processing", "creating", "done"]);
   });
 });
 
@@ -486,6 +479,21 @@ describe("processUrls - duplicate detection", () => {
 
     expect(results[0]!.status).toBe("success");
   });
+
+  it("detects duplicates with normalized URL comparison", async () => {
+    const storedUrl = "https://www.example.com/article?utm_source=twitter";
+    const incomingUrl = "https://example.com/article";
+
+    mockSearchNotes.mockResolvedValue([{ filename: "Inbox/article.md", score: 1.0 }]);
+    mockReadNote.mockResolvedValue(
+      `---\nsource: "${storedUrl}"\ndate_saved: 2026-01-01\n---\n# Article`
+    );
+
+    const results = await processUrls([incomingUrl], TEST_CONFIG, createMockProvider());
+
+    expect(results[0]!.status).toBe("skipped");
+    expect(mockFetchAndExtract).not.toHaveBeenCalled();
+  });
 });
 
 // -- Tag groups flow ----------------------------------------------------------
@@ -644,5 +652,127 @@ describe("processUrls - error categorization", () => {
 
     expect(results[0]!.status).toBe("failed");
     expect(results[0]!.errorCategory).toBe("unknown");
+  });
+});
+
+// -- URL normalization --------------------------------------------------------
+
+describe("normalizeUrl", () => {
+  it("strips utm tracking params", () => {
+    expect(normalizeUrl("https://example.com/page?utm_source=twitter&utm_medium=social"))
+      .toBe("https://example.com/page");
+  });
+
+  it("strips fbclid and gclid", () => {
+    expect(normalizeUrl("https://example.com/page?fbclid=abc123"))
+      .toBe("https://example.com/page");
+    expect(normalizeUrl("https://example.com/page?gclid=xyz456"))
+      .toBe("https://example.com/page");
+  });
+
+  it("strips s param (Twitter share)", () => {
+    expect(normalizeUrl("https://x.com/user/status/123?s=20"))
+      .toBe("https://x.com/user/status/123");
+  });
+
+  it("normalizes http to https", () => {
+    expect(normalizeUrl("http://example.com/page"))
+      .toBe("https://example.com/page");
+  });
+
+  it("strips www prefix", () => {
+    expect(normalizeUrl("https://www.example.com/page"))
+      .toBe("https://example.com/page");
+  });
+
+  it("strips trailing slash", () => {
+    expect(normalizeUrl("https://example.com/page/"))
+      .toBe("https://example.com/page");
+  });
+
+  it("strips fragment", () => {
+    expect(normalizeUrl("https://example.com/page#section"))
+      .toBe("https://example.com/page");
+  });
+
+  it("preserves non-tracking query params", () => {
+    expect(normalizeUrl("https://example.com/search?q=hello&page=2"))
+      .toBe("https://example.com/search?q=hello&page=2");
+  });
+
+  it("handles combined normalizations", () => {
+    expect(normalizeUrl("http://www.example.com/page/?utm_source=twitter&q=test#heading"))
+      .toBe("https://example.com/page?q=test");
+  });
+
+  it("returns raw string for invalid URLs", () => {
+    expect(normalizeUrl("not-a-url")).toBe("not-a-url");
+  });
+});
+
+// -- Cancellation -------------------------------------------------------------
+
+describe("processUrls - cancellation", () => {
+  it("stops processing when isCancelled returns true", async () => {
+    let callCount = 0;
+    const isCancelled = () => {
+      callCount++;
+      // Cancel after first URL starts
+      return callCount > 2;
+    };
+
+    const urls = ["https://example.com/a", "https://example.com/b"];
+
+    mockFetchAndExtract
+      .mockResolvedValueOnce(createExtracted({ url: urls[0] }))
+      .mockResolvedValueOnce(createExtracted({ url: urls[1] }));
+
+    const results = await processUrls(
+      urls,
+      TEST_CONFIG,
+      createMockProvider(),
+      undefined,
+      undefined,
+      isCancelled
+    );
+
+    expect(results).toHaveLength(2);
+    // At least one should be cancelled
+    const cancelledResults = results.filter((r) => r.error === "Cancelled");
+    expect(cancelledResults.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// -- Parallel processing ------------------------------------------------------
+
+describe("processUrls - parallel processing", () => {
+  it("processes all URLs and returns correct results regardless of order", async () => {
+    const urls = [
+      "https://example.com/a",
+      "https://example.com/b",
+      "https://example.com/c",
+    ];
+
+    mockFetchAndExtract
+      .mockResolvedValueOnce(createExtracted({ url: urls[0] }))
+      .mockResolvedValueOnce(createExtracted({ url: urls[1] }))
+      .mockResolvedValueOnce(createExtracted({ url: urls[2] }));
+
+    const p1 = createProcessed({ title: "A" });
+    const p2 = createProcessed({ title: "B" });
+    const p3 = createProcessed({ title: "C" });
+    mockProcessContent
+      .mockResolvedValueOnce(p1)
+      .mockResolvedValueOnce(p2)
+      .mockResolvedValueOnce(p3);
+
+    const results = await processUrls(urls, TEST_CONFIG, createMockProvider());
+
+    expect(results).toHaveLength(3);
+    expect(results.every((r) => r.status === "success")).toBe(true);
+    // Results should be in URL order (maintained by processWithConcurrency)
+    expect(results[0]!.note?.title).toBe("A");
+    expect(results[1]!.note?.title).toBe("B");
+    expect(results[2]!.note?.title).toBe("C");
   });
 });

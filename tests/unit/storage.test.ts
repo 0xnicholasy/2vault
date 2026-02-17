@@ -155,9 +155,7 @@ describe("getProcessingState / setProcessingState / clearProcessingState", () =>
       active: true,
       urls: ["https://example.com/1"],
       results: [],
-      currentIndex: 0,
-      currentUrl: "https://example.com/1",
-      currentStatus: "extracting" as const,
+      urlStatuses: { "https://example.com/1": "extracting" as const },
       startedAt: 1707000000000,
       cancelled: false,
     };
@@ -173,20 +171,18 @@ describe("getProcessingState / setProcessingState / clearProcessingState", () =>
       active: true,
       urls: ["https://example.com/1"],
       results: [],
-      currentIndex: 0,
-      currentUrl: "https://example.com/1",
-      currentStatus: "extracting" as const,
+      urlStatuses: { "https://example.com/1": "extracting" as const },
       startedAt: 1707000000000,
       cancelled: false,
     };
     await setProcessingState(initial);
 
-    const updated = { ...initial, active: false, currentStatus: "done" as const };
+    const updated = { ...initial, active: false, urlStatuses: { "https://example.com/1": "done" as const } };
     await setProcessingState(updated);
 
     const retrieved = await getProcessingState();
     expect(retrieved?.active).toBe(false);
-    expect(retrieved?.currentStatus).toBe("done");
+    expect(retrieved?.urlStatuses["https://example.com/1"]).toBe("done");
   });
 
   it("clears state completely", async () => {
@@ -194,9 +190,7 @@ describe("getProcessingState / setProcessingState / clearProcessingState", () =>
       active: true,
       urls: [],
       results: [],
-      currentIndex: 0,
-      currentUrl: "",
-      currentStatus: "queued",
+      urlStatuses: {},
       startedAt: 0,
       cancelled: false,
     });

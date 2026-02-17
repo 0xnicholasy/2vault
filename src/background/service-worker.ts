@@ -28,7 +28,7 @@ export function isSocialMediaUrl(url: string): boolean {
 // -- Tab-based DOM extraction -------------------------------------------------
 
 const DOM_EXTRACT_TIMEOUT_MS = 15_000;
-const MAX_CONCURRENT_TABS = 2;
+const MAX_CONCURRENT_TABS = 5;
 
 let activeTabExtractions = 0;
 
@@ -128,13 +128,15 @@ async function extractFromActiveTab(tabId: number, url: string): Promise<Extract
 // -- Batch processing ---------------------------------------------------------
 
 function createInitialState(urls: string[]): ProcessingState {
+  const urlStatuses: Record<string, UrlStatus> = {};
+  for (const url of urls) {
+    urlStatuses[url] = "queued";
+  }
   return {
     active: true,
     urls,
     results: [],
-    currentIndex: 0,
-    currentUrl: urls[0] ?? "",
-    currentStatus: "queued",
+    urlStatuses,
     startedAt: Date.now(),
     cancelled: false,
   };
@@ -146,6 +148,8 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
   const state = createInitialState(urls);
   await setProcessingState(state);
 
+  // Live urlStatuses map - mutated by onProgress, read by final state
+  const urlStatuses: Record<string, UrlStatus> = { ...state.urlStatuses };
   const results: ProcessingResult[] = [];
   let batchError: string | undefined;
 
@@ -153,19 +157,13 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
     const config = await getConfig();
     const provider = createDefaultProvider(config);
 
-    const onProgress = async (
-      url: string,
-      status: string,
-      index: number,
-      _total: number
-    ) => {
+    const onProgress = async (url: string, status: string) => {
       if (cancelRequested) return;
+      urlStatuses[url] = status as UrlStatus;
       await setProcessingState({
         ...state,
-        currentIndex: index,
-        currentUrl: url,
-        currentStatus: status as UrlStatus,
-        results,
+        urlStatuses: { ...urlStatuses },
+        results: [...results],
       });
     };
 
@@ -174,7 +172,8 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
       config,
       provider,
       onProgress,
-      smartExtract
+      smartExtract,
+      () => cancelRequested
     );
     results.push(...allResults);
   } catch (err) {
@@ -187,8 +186,16 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
     for (const url of urls) {
       if (!processedUrls.has(url)) {
         results.push({ url, status: "failed", error: message });
+        urlStatuses[url] = "failed";
       }
     }
+  }
+
+  // Build final urlStatuses from results for consistency
+  for (const result of results) {
+    if (result.status === "success") urlStatuses[result.url] = "done";
+    else if (result.status === "skipped") urlStatuses[result.url] = "skipped";
+    else urlStatuses[result.url] = "failed";
   }
 
   // Save final state - always runs, even if getConfig/createDefaultProvider threw
@@ -197,9 +204,7 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
     active: false,
     cancelled: cancelRequested,
     results,
-    currentIndex: urls.length,
-    currentUrl: "",
-    currentStatus: "done",
+    urlStatuses,
     error: batchError,
   });
 
@@ -289,13 +294,15 @@ chrome.runtime.onMessage.addListener(
           const message = err instanceof Error ? err.message : "Processing failed";
           console.error("[2Vault] Unhandled processing error:", message);
           try {
+            const failedStatuses: Record<string, UrlStatus> = {};
+            for (const u of urls) {
+              failedStatuses[u] = "failed";
+            }
             await setProcessingState({
               active: false,
               urls,
               results: urls.map((u) => ({ url: u, status: "failed" as const, error: message })),
-              currentIndex: urls.length,
-              currentUrl: "",
-              currentStatus: "done" as UrlStatus,
+              urlStatuses: failedStatuses,
               startedAt: Date.now(),
               cancelled: false,
               error: message,

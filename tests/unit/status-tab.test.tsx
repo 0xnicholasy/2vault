@@ -126,9 +126,7 @@ describe("StatusTab", () => {
       active: true,
       urls: ["https://example.com/1"],
       results: [],
-      currentIndex: 0,
-      currentUrl: "https://example.com/1",
-      currentStatus: "extracting",
+      urlStatuses: { "https://example.com/1": "extracting" },
       startedAt: Date.now(),
       cancelled: false,
     };
