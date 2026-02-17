@@ -45,3 +45,6 @@ scripts/results.json
 
 # Session-specific task tracking
 tasks/
+
+# Icon generation working directory
+icons-gen/
