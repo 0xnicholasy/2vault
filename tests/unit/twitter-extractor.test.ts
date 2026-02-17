@@ -25,11 +25,12 @@ import {
   extractImageDescriptions,
   extractQuoteTweet,
   isThreadPage,
-  extractThread,
+  extractThreadWithReplies,
   extractSingleTweet,
   fallbackExtraction,
   SELECTORS,
   SELECTOR_VERSION,
+  MAX_REPLIES,
 } from "@/content-scripts/twitter-extractor";
 
 function loadFixture(name: string): string {
@@ -135,9 +136,9 @@ describe("twitter-extractor - single tweet", () => {
   });
 });
 
-// -- Thread extraction --------------------------------------------------------
+// -- Thread extraction (same-author thread) -----------------------------------
 
-describe("twitter-extractor - thread", () => {
+describe("twitter-extractor - thread (same author)", () => {
   beforeEach(() => {
     setDocumentFromFixture("twitter-thread.html");
   });
@@ -146,9 +147,9 @@ describe("twitter-extractor - thread", () => {
     expect(isThreadPage()).toBe(true);
   });
 
-  it("extracts thread with numbered parts", () => {
-    const thread = extractThread();
-    expect(thread.tweetCount).toBe(3);
+  it("extracts thread with numbered author tweets", () => {
+    const thread = extractThreadWithReplies();
+    expect(thread.authorTweetCount).toBe(3);
     expect(thread.content).toContain("**[1/3]**");
     expect(thread.content).toContain("**[2/3]**");
     expect(thread.content).toContain("**[3/3]**");
@@ -157,17 +158,81 @@ describe("twitter-extractor - thread", () => {
     expect(thread.content).toContain("isolated worlds");
   });
 
+  it("has ## Thread section header", () => {
+    const thread = extractThreadWithReplies();
+    expect(thread.content).toContain("## Thread");
+  });
+
+  it("has no ## Top Replies when all tweets are same author", () => {
+    const thread = extractThreadWithReplies();
+    expect(thread.replyCount).toBe(0);
+    expect(thread.content).not.toContain("## Top Replies");
+  });
+
   it("includes image descriptions in thread tweets", () => {
-    const thread = extractThread();
+    const thread = extractThreadWithReplies();
     expect(thread.content).toContain("[Images: Diagram showing isolated worlds]");
   });
 
-  it("extracts thread as full result", () => {
+  it("extracts thread as full result with correct title", () => {
     const result = extractFromDom();
     expect(result.status).toBe("success");
     expect(result.title).toContain("Thread by");
     expect(result.title).toContain("3 tweets");
+    expect(result.title).not.toContain("replies"); // no replies in same-author thread
     expect(result.content).toContain("---"); // thread separator
+  });
+});
+
+// -- Thread extraction (mixed authors) ----------------------------------------
+
+describe("twitter-extractor - thread with replies", () => {
+  beforeEach(() => {
+    setDocumentFromFixture("twitter-thread-with-replies.html");
+  });
+
+  it("separates author tweets from replies", () => {
+    const thread = extractThreadWithReplies();
+    expect(thread.authorTweetCount).toBe(4); // @devexpert has 4 tweets
+    expect(thread.totalReplies).toBe(3); // 3 replies from other users
+    expect(thread.replyCount).toBe(3);
+  });
+
+  it("numbers only author tweets in ## Thread section", () => {
+    const thread = extractThreadWithReplies();
+    expect(thread.content).toContain("## Thread");
+    expect(thread.content).toContain("**[1/4]**");
+    expect(thread.content).toContain("**[2/4]**");
+    expect(thread.content).toContain("**[3/4]**");
+    expect(thread.content).toContain("**[4/4]**");
+  });
+
+  it("includes replies in ## Top Replies section", () => {
+    const thread = extractThreadWithReplies();
+    expect(thread.content).toContain("## Top Replies");
+    expect(thread.content).toContain("Web Dev Fan (@webdevfan)");
+    expect(thread.content).toContain("Browser Hacker (@browserhacker)");
+    expect(thread.content).toContain("Extension Dev (@extensiondev)");
+  });
+
+  it("attributes replies with handle", () => {
+    const thread = extractThreadWithReplies();
+    expect(thread.content).toContain("**Web Dev Fan (@webdevfan):** Great tip!");
+  });
+
+  it("generates title with reply count", () => {
+    const result = extractFromDom();
+    expect(result.title).toContain("4 tweets");
+    expect(result.title).toContain("3 replies");
+  });
+
+  it("includes image descriptions in author tweets", () => {
+    const thread = extractThreadWithReplies();
+    expect(thread.content).toContain("[Images: Screenshot of side panel API docs]");
+  });
+
+  it("exports MAX_REPLIES constant", () => {
+    expect(MAX_REPLIES).toBe(5);
   });
 });
 

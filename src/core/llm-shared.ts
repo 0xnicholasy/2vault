@@ -12,16 +12,33 @@ export interface CategorizationResult {
 }
 
 export function buildSummarizationPrompt(content: ExtractedContent): string {
-  const parts = [
+  const parts: Array<string | null> = [
     `Title: ${content.title}`,
     content.author ? `Author: ${content.author}` : null,
     content.datePublished ? `Published: ${content.datePublished}` : null,
     `URL: ${content.url}`,
     `Type: ${content.type} (${content.platform})`,
     "",
-    "Content:",
-    content.content,
   ];
+
+  // Add thread/conversation context hints for better LLM summarization
+  const hasTopReplies = content.content.includes("## Top Replies");
+  const hasTopComments = content.content.includes("## Top Comments");
+
+  if (hasTopReplies) {
+    parts.push(
+      "Note: This is a threaded conversation. Summarize the author's thread first, then note key discussion points from replies.",
+      ""
+    );
+  } else if (hasTopComments) {
+    parts.push(
+      "Note: This is a forum post with comments. Summarize the post first, then note key insights from the discussion.",
+      ""
+    );
+  }
+
+  parts.push("Content:", content.content);
+
   return parts.filter((p) => p !== null).join("\n");
 }
 

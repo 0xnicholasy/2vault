@@ -14,6 +14,7 @@ const SELECTORS = {
 } as const;
 
 const MAX_BODY_TEXT = 8_000;
+const MAX_REPLIES = 5;
 
 function extractTweetText(article: Element): string {
   const tweetText = article.querySelector(SELECTORS.tweetText);
@@ -77,26 +78,77 @@ function isThreadPage(): boolean {
   return tweets.length > 1;
 }
 
-function extractThread(): { content: string; tweetCount: number } {
+interface ThreadResult {
+  content: string;
+  authorTweetCount: number;
+  replyCount: number;
+  totalReplies: number;
+}
+
+function extractThreadWithReplies(): ThreadResult {
   const tweets = document.querySelectorAll(SELECTORS.tweet);
-  const parts: string[] = [];
+
+  // Determine OP handle from first tweet
+  const firstTweet = tweets[0];
+  const opHandle = firstTweet ? extractAuthor(firstTweet).handle : "";
+
+  const authorParts: string[] = [];
+  const replyParts: string[] = [];
+  let totalReplies = 0;
 
   for (let i = 0; i < tweets.length; i++) {
     const article = tweets[i]!;
     const text = extractTweetText(article);
     if (!text) continue;
 
+    const { name, handle } = extractAuthor(article);
     const quoteTweet = extractQuoteTweet(article);
     const images = extractImageDescriptions(article);
 
-    let part = `**[${i + 1}/${tweets.length}]** ${text}`;
-    if (quoteTweet) part += `\n\n${quoteTweet}`;
-    if (images.length > 0) part += `\n\n[Images: ${images.join(", ")}]`;
+    const isAuthorTweet = handle === opHandle;
 
-    parts.push(part);
+    if (isAuthorTweet) {
+      let part = `**[${authorParts.length + 1}]** ${text}`;
+      if (quoteTweet) part += `\n\n${quoteTweet}`;
+      if (images.length > 0) part += `\n\n[Images: ${images.join(", ")}]`;
+      authorParts.push(part);
+    } else {
+      totalReplies++;
+      if (replyParts.length < MAX_REPLIES) {
+        const attribution = name ? `${name} (${handle})` : handle;
+        let part = `**${attribution}:** ${text}`;
+        if (quoteTweet) part += `\n\n${quoteTweet}`;
+        if (images.length > 0) part += `\n\n[Images: ${images.join(", ")}]`;
+        replyParts.push(part);
+      }
+    }
   }
 
-  return { content: parts.join("\n\n---\n\n"), tweetCount: tweets.length };
+  // Build numbered author thread section
+  const numberedAuthorParts = authorParts.map((part, i) => {
+    return part.replace(`**[${i + 1}]**`, `**[${i + 1}/${authorParts.length}]**`);
+  });
+
+  const sections: string[] = [];
+
+  sections.push("## Thread");
+  sections.push(numberedAuthorParts.join("\n\n---\n\n"));
+
+  if (replyParts.length > 0) {
+    sections.push("");
+    sections.push("## Top Replies");
+    if (totalReplies > MAX_REPLIES) {
+      sections.push(`*(Showing ${MAX_REPLIES} of ${totalReplies} replies)*`);
+    }
+    sections.push(replyParts.join("\n\n---\n\n"));
+  }
+
+  return {
+    content: sections.join("\n\n"),
+    authorTweetCount: authorParts.length,
+    replyCount: replyParts.length,
+    totalReplies,
+  };
 }
 
 function extractSingleTweet(): string {
@@ -131,9 +183,10 @@ function extractFromDom(): ExtractedContent {
     let title: string;
 
     if (isThread) {
-      const thread = extractThread();
+      const thread = extractThreadWithReplies();
       content = thread.content;
-      title = `Thread by ${name || handle} (${thread.tweetCount} tweets)`;
+      const replyPart = thread.replyCount > 0 ? ` + ${thread.totalReplies} replies` : "";
+      title = `Thread by ${name || handle} (${thread.authorTweetCount} tweets)${replyPart}`;
     } else {
       content = extractSingleTweet();
       title = `Post by ${name || handle}`;
@@ -243,10 +296,11 @@ export {
   extractImageDescriptions,
   extractQuoteTweet,
   isThreadPage,
-  extractThread,
+  extractThreadWithReplies,
   extractSingleTweet,
   fallbackExtraction,
   waitForTweetElement,
   SELECTORS,
   SELECTOR_VERSION,
+  MAX_REPLIES,
 };

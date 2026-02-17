@@ -708,6 +708,22 @@ describe("normalizeUrl", () => {
   it("returns raw string for invalid URLs", () => {
     expect(normalizeUrl("not-a-url")).toBe("not-a-url");
   });
+
+  it("normalizes old.reddit.com to reddit.com", () => {
+    expect(normalizeUrl("https://old.reddit.com/r/webdev/comments/abc123/test_post"))
+      .toBe("https://reddit.com/r/webdev/comments/abc123/test_post");
+  });
+
+  it("normalizes www.reddit.com to reddit.com", () => {
+    expect(normalizeUrl("https://www.reddit.com/r/webdev/comments/abc123/test_post"))
+      .toBe("https://reddit.com/r/webdev/comments/abc123/test_post");
+  });
+
+  it("deduplicates old.reddit.com and www.reddit.com URLs to same result", () => {
+    const oldReddit = normalizeUrl("https://old.reddit.com/r/webdev/comments/abc123/test_post");
+    const newReddit = normalizeUrl("https://www.reddit.com/r/webdev/comments/abc123/test_post");
+    expect(oldReddit).toBe(newReddit);
+  });
 });
 
 // -- Cancellation -------------------------------------------------------------

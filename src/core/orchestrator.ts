@@ -57,6 +57,11 @@ export function normalizeUrl(rawUrl: string): string {
     // Strip www. prefix
     url.hostname = url.hostname.replace(/^www\./, "");
 
+    // Normalize old.reddit.com -> reddit.com
+    if (url.hostname === "old.reddit.com") {
+      url.hostname = "reddit.com";
+    }
+
     // Remove tracking params
     for (const key of [...url.searchParams.keys()]) {
       if (TRACKING_PARAMS.has(key)) {

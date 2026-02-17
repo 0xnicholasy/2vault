@@ -1,3 +1,5 @@
+export type Platform = "web" | "x" | "linkedin" | "reddit";
+
 export interface ExtractedContent {
   url: string;
   title: string;
@@ -6,7 +8,7 @@ export interface ExtractedContent {
   datePublished: string | null;
   wordCount: number;
   type: "article" | "social-media";
-  platform: "web" | "x" | "linkedin";
+  platform: Platform;
   status: "success" | "failed";
   error?: string;
 }
@@ -39,7 +41,7 @@ export interface ProcessedNote {
   suggestedFolder: string;
   suggestedTags: string[];
   type: "article" | "social-media";
-  platform: "web" | "x" | "linkedin";
+  platform: Platform;
   source: ExtractedContent;
 }
 

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head><title>How I built a Chrome extension with AI - r/webdev</title></head>
+<body>
+  <!-- New Reddit DOM structure using web components -->
+  <shreddit-post
+    post-title="How I built a Chrome extension with AI"
+    author="techbuilder42"
+    subreddit-prefixed-name="r/webdev"
+    score="247"
+    flair-text="Show & Tell"
+  >
+    <time slot="timestamp" datetime="2026-02-10T15:30:00.000Z">Feb 10</time>
+    <div slot="title">How I built a Chrome extension with AI</div>
+    <div slot="text-body">
+      I spent the last month building a Chrome extension that uses AI to summarize web pages. Here are my key learnings about Manifest V3, content scripts, and integrating with LLM APIs. The biggest challenge was handling service worker lifecycle.
+    </div>
+  </shreddit-post>
+
+  <!-- Top-level comment (depth 0) -->
+  <shreddit-comment author="frontenddev99" score="89" depth="0">
+    <div slot="comment">
+      This is awesome! What LLM provider did you end up using? I've been looking at OpenRouter for a similar project.
+    </div>
+    <!-- Nested reply (depth 1) -->
+    <shreddit-comment author="techbuilder42" score="45" depth="1">
+      <div slot="comment">
+        Thanks! I went with OpenRouter - it gives access to multiple models through a single API key.
+      </div>
+    </shreddit-comment>
+  </shreddit-comment>
+
+  <!-- Top-level comment (depth 0) -->
+  <shreddit-comment author="chromefanatic" score="62" depth="0">
+    <div slot="comment">
+      Manifest V3 service workers are such a pain. Have you considered using offscreen documents for persistent processing?
+    </div>
+  </shreddit-comment>
+
+  <!-- Top-level comment (depth 0) -->
+  <shreddit-comment author="airesearcher" score="38" depth="0">
+    <div slot="comment">
+      How do you handle rate limiting with the LLM API? I keep hitting 429 errors when processing multiple pages.
+    </div>
+    <!-- Nested replies (depth 1) -->
+    <shreddit-comment author="techbuilder42" score="22" depth="1">
+      <div slot="comment">
+        I implemented a worker pool with a concurrency limit of 5 - that fixed the rate limiting issues.
+      </div>
+    </shreddit-comment>
+    <shreddit-comment author="devops_guru" score="15" depth="1">
+      <div slot="comment">
+        You could also add exponential backoff as a safety net.
+      </div>
+    </shreddit-comment>
+  </shreddit-comment>
+
+  <!-- Top-level comment (depth 0) -->
+  <shreddit-comment author="privacyfirst" score="25" depth="0">
+    <div slot="comment">
+      What data gets sent to the LLM? I'm concerned about privacy when processing sensitive pages.
+    </div>
+  </shreddit-comment>
+
+  <!-- Top-level comment (depth 0) -->
+  <shreddit-comment author="indie_hacker" score="18" depth="0">
+    <div slot="comment">
+      Would love to see this on the Chrome Web Store. Are you planning to publish it?
+    </div>
+  </shreddit-comment>
+
+  <!-- Top-level comment (depth 0) - beyond MAX_COMMENTS -->
+  <shreddit-comment author="lowqualityposter" score="3" depth="0">
+    <div slot="comment">
+      Cool I guess
+    </div>
+  </shreddit-comment>
+</body>
+</html>

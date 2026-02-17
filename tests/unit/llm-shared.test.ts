@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  buildSummarizationPrompt,
   buildCategorizationPrompt,
   validateCategorizationResult,
 } from "@/core/llm-shared";
@@ -38,6 +39,43 @@ function createVaultContext(overrides?: Partial<VaultContext>): VaultContext {
     ...overrides,
   };
 }
+
+// -- Thread context hints in summarization prompt -----------------------------
+
+describe("buildSummarizationPrompt - thread context hints", () => {
+  it("adds X/Twitter thread hint when content has ## Top Replies", () => {
+    const content = createContent({
+      platform: "x",
+      content: "## Thread\n\n**[1/2]** First tweet\n\n## Top Replies\n\n**@user:** Reply text",
+    });
+    const prompt = buildSummarizationPrompt(content);
+    expect(prompt).toContain("Summarize the author's thread first");
+    expect(prompt).toContain("discussion points from replies");
+  });
+
+  it("adds Reddit hint when content has ## Top Comments", () => {
+    const content = createContent({
+      platform: "reddit",
+      content: "## Post\n\nPost body\n\n## Top Comments\n\n**u/user:** Comment text",
+    });
+    const prompt = buildSummarizationPrompt(content);
+    expect(prompt).toContain("Summarize the post first");
+    expect(prompt).toContain("insights from the discussion");
+  });
+
+  it("does not add hints for regular article content", () => {
+    const content = createContent({ platform: "web", content: "Regular article content" });
+    const prompt = buildSummarizationPrompt(content);
+    expect(prompt).not.toContain("Summarize the author's thread");
+    expect(prompt).not.toContain("Summarize the post first");
+  });
+
+  it("does not add hints for single-tweet content", () => {
+    const content = createContent({ platform: "x", content: "Just a single tweet" });
+    const prompt = buildSummarizationPrompt(content);
+    expect(prompt).not.toContain("Summarize the author's thread");
+  });
+});
 
 // -- PARA-aware prompt --------------------------------------------------------
 
