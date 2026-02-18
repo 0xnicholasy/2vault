@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { crx } from "@crxjs/vite-plugin";
 import { resolve } from "path";
@@ -25,16 +25,5 @@ export default defineConfig({
       port: 5173,
     },
     cors: true,
-  },
-  test: {
-    globals: true,
-    include: ["tests/**/*.test.{ts,tsx}"],
-    alias: {
-      "@": resolve(__dirname, "src"),
-    },
-    environmentMatchGlobs: [
-      ["tests/**/*.test.tsx", "jsdom"],
-    ],
-    setupFiles: ["tests/setup.ts"],
   },
 });
