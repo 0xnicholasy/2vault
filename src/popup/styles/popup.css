@@ -13,6 +13,7 @@
   --ctp-red: #f38ba8;
   --ctp-overlay0: #6c7086;
   --ctp-yellow: #f9e2af;
+  --ctp-peach: #fab387;
 }
 
 *,
@@ -500,6 +501,10 @@ body {
   color: var(--ctp-yellow);
 }
 
+.status-icon-review {
+  color: var(--ctp-peach);
+}
+
 .status-icon-active {
   color: var(--ctp-mauve);
 }
@@ -718,6 +723,11 @@ body {
 .status-badge-failed {
   background: rgba(243, 139, 168, 0.15);
   color: var(--ctp-red);
+}
+
+.status-badge-review {
+  background: rgba(250, 179, 135, 0.15);
+  color: var(--ctp-peach);
 }
 
 .status-badge-skipped {
@@ -1097,4 +1107,21 @@ body {
 .copy-url-btn:hover {
   color: var(--ctp-text);
   border-color: var(--ctp-surface2);
+}
+
+.review-expanded-details {
+  padding: 6px 8px;
+  background: var(--ctp-surface0);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.review-expanded-details .review-detail {
+  color: var(--ctp-peach);
+}
+
+.url-status-review .url-status-label {
+  color: var(--ctp-peach);
 }

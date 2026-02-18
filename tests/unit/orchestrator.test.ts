@@ -759,6 +759,89 @@ describe("processUrls - cancellation", () => {
   });
 });
 
+// -- Content quality validation -----------------------------------------------
+
+describe("processUrls - content quality validation", () => {
+  it("returns status 'review' for low-quality content", async () => {
+    mockFetchAndExtract.mockReset();
+    mockFetchAndExtract.mockResolvedValue(
+      createExtracted({
+        content: "Please sign in to continue reading this article.",
+        wordCount: 15,
+      })
+    );
+
+    const results = await processUrls(
+      ["https://example.com/paywalled"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("review");
+    expect(results[0]!.contentQuality).toBeDefined();
+    expect(results[0]!.contentQuality!.isLowQuality).toBe(true);
+    expect(results[0]!.contentQuality!.reason).toBe("login-wall");
+  });
+
+  it("still saves note to vault for review results", async () => {
+    mockFetchAndExtract.mockReset();
+    mockFetchAndExtract.mockResolvedValue(
+      createExtracted({
+        content: "Checking your browser before accessing the site. Please wait.",
+        wordCount: 12,
+      })
+    );
+
+    const results = await processUrls(
+      ["https://example.com/cloudflare"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("review");
+    expect(results[0]!.note).toBeDefined();
+    expect(results[0]!.folder).toBeDefined();
+    expect(mockCreateNote).toHaveBeenCalled();
+  });
+
+  it("reports 'review' status via progress callback", async () => {
+    mockFetchAndExtract.mockReset();
+    mockFetchAndExtract.mockResolvedValue(
+      createExtracted({
+        content: "Subscribe to continue reading this premium content.",
+        wordCount: 10,
+      })
+    );
+
+    const statuses: string[] = [];
+    const onProgress: ProgressCallback = (_url, status) => {
+      statuses.push(status);
+    };
+
+    await processUrls(
+      ["https://example.com/paywall"],
+      TEST_CONFIG,
+      createMockProvider(),
+      onProgress
+    );
+
+    expect(statuses).toContain("review");
+    expect(statuses).not.toContain("done");
+  });
+
+  it("returns status 'success' for normal content (no regression)", async () => {
+    // Default mock has wordCount: 500 and normal content
+    const results = await processUrls(
+      ["https://example.com/normal"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("success");
+    expect(results[0]!.contentQuality).toBeUndefined();
+  });
+});
+
 // -- Parallel processing ------------------------------------------------------
 
 describe("processUrls - parallel processing", () => {

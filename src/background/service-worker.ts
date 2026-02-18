@@ -268,6 +268,7 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
   // Build final urlStatuses from results for consistency
   for (const result of results) {
     if (result.status === "success") urlStatuses[result.url] = "done";
+    else if (result.status === "review") urlStatuses[result.url] = "review";
     else if (result.status === "skipped") urlStatuses[result.url] = "skipped";
     else urlStatuses[result.url] = "failed";
   }
@@ -311,12 +312,14 @@ async function handleSingleUrlCapture(
   const results = await processUrls([url], config, provider, undefined, extractFn);
   const result = results[0];
 
-  if (result?.status === "success") {
+  if (result?.status === "success" || result?.status === "review") {
     chrome.notifications.create({
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
       title: "2Vault",
-      message: `Saved to ${result.folder ?? "vault"}`,
+      message: result.status === "review"
+        ? `Saved to ${result.folder ?? "vault"} (needs review)`
+        : `Saved to ${result.folder ?? "vault"}`,
     });
   } else {
     // Store URL for popup prefill on retry

@@ -4,6 +4,7 @@ import {
   IoCloseCircle,
   IoEllipsisHorizontal,
   IoHourglass,
+  IoWarning,
 } from "react-icons/io5";
 import type { UrlStatus, ProcessingState } from "@/background/messages.ts";
 import { generateFilename } from "@/core/note-formatter";
@@ -12,6 +13,8 @@ export function StatusIcon({ status }: { status: UrlStatus }) {
   switch (status) {
     case "done":
       return <IoCheckmarkCircle className="status-icon status-icon-done" />;
+    case "review":
+      return <IoWarning className="status-icon status-icon-review" />;
     case "failed":
       return <IoCloseCircle className="status-icon status-icon-failed" />;
     case "skipped":
@@ -37,6 +40,7 @@ const STATUS_LABELS: Record<UrlStatus, string> = {
   processing: "Summarizing",
   creating: "Saving",
   done: "Done",
+  review: "Needs Review",
   failed: "Failed",
   skipped: "Skipped",
 };

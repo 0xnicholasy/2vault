@@ -47,14 +47,28 @@ export interface ProcessedNote {
 
 export type ErrorCategory = "network" | "extraction" | "llm" | "vault" | "unknown";
 
+export type ContentQualityReason =
+  | "login-wall"
+  | "bot-protection"
+  | "soft-404"
+  | "deleted-content"
+  | "insufficient-content";
+
+export interface ContentQuality {
+  isLowQuality: boolean;
+  reason?: ContentQualityReason;
+  detail?: string;
+}
+
 export interface ProcessingResult {
   url: string;
-  status: "success" | "failed" | "skipped";
+  status: "success" | "failed" | "skipped" | "review";
   note?: ProcessedNote;
   folder?: string;
   error?: string;
   errorCategory?: ErrorCategory;
   skipReason?: string;
+  contentQuality?: ContentQuality;
 }
 
 export interface SearchResult {

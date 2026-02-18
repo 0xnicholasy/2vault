@@ -284,7 +284,7 @@ describe("fetchAndExtract", () => {
     const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(options.signal).toBeInstanceOf(AbortSignal);
     expect((options.headers as Record<string, string>)["User-Agent"]).toContain(
-      "2Vault"
+      "Chrome"
     );
   });
 });

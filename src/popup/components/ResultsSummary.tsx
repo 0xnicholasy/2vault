@@ -8,11 +8,11 @@ import {
   IoChevronDown,
   IoChevronForward,
 } from "react-icons/io5";
-import type { ProcessingResult } from "@/core/types";
+import type { ProcessingResult, ContentQualityReason } from "@/core/types";
 import { formatUrl, buildObsidianUri } from "@/popup/utils/processing-ui";
-import { ERROR_SUGGESTIONS } from "@/utils/error-suggestions";
+import { ERROR_SUGGESTIONS, QUALITY_SUGGESTIONS } from "@/utils/error-suggestions";
 
-type Filter = "all" | "failures" | "skipped";
+type Filter = "all" | "failures" | "skipped" | "review";
 
 interface ResultsSummaryProps {
   results: ProcessingResult[];
@@ -42,17 +42,21 @@ export function ResultsSummary({
 
   const failedResults = results.filter((r) => r.status === "failed");
   const skippedResults = results.filter((r) => r.status === "skipped");
+  const reviewResults = results.filter((r) => r.status === "review");
   const failedUrls = failedResults.map((r) => r.url);
   const allFailed = failedResults.length === results.length;
   const hasFailures = failedResults.length > 0;
   const hasSkipped = skippedResults.length > 0;
+  const hasReview = reviewResults.length > 0;
 
   const displayed =
     filter === "failures"
       ? failedResults
       : filter === "skipped"
         ? skippedResults
-        : results;
+        : filter === "review"
+          ? reviewResults
+          : results;
 
   const toggleRow = (index: number) => {
     setExpandedRows((prev) => {
@@ -102,6 +106,14 @@ export function ResultsSummary({
           >
             Failures ({failedResults.length})
           </button>
+          {hasReview && (
+            <button
+              className={`filter-btn ${filter === "review" ? "active" : ""}`}
+              onClick={() => setFilter("review")}
+            >
+              Review ({reviewResults.length})
+            </button>
+          )}
           {hasSkipped && (
             <button
               className={`filter-btn ${filter === "skipped" ? "active" : ""}`}
@@ -125,15 +137,18 @@ export function ResultsSummary({
         <tbody>
           {displayed.map((result, index) => {
             const isFailed = result.status === "failed";
+            const isReview = result.status === "review";
+            const isExpandable = isFailed || isReview;
             const isExpanded = expandedRows.has(index);
             const category = result.errorCategory ?? "unknown";
+            const qualityReason = result.contentQuality?.reason;
 
             return (
               <tr
                 key={`${index}-${result.url}`}
-                className={isFailed ? "error-row-expandable" : ""}
-                title={isFailed ? "Click to expand error details" : undefined}
-                onClick={isFailed ? () => toggleRow(index) : undefined}
+                className={isExpandable ? "error-row-expandable" : ""}
+                title={isExpandable ? "Click to expand details" : undefined}
+                onClick={isExpandable ? () => toggleRow(index) : undefined}
               >
                 <td title={result.url}>{formatUrl(result.url)}</td>
                 <td>{result.folder ?? "-"}</td>
@@ -143,7 +158,7 @@ export function ResultsSummary({
                   >
                     {isFailed ? category : result.status}
                   </span>
-                  {isFailed && (
+                  {isExpandable && (
                     <span className="error-toggle-icon">
                       {isExpanded ? (
                         <IoChevronDown />
@@ -171,10 +186,20 @@ export function ResultsSummary({
                       </div>
                     </div>
                   )}
+                  {isReview && isExpanded && (
+                    <div className="review-expanded-details">
+                      <div className="review-detail">{result.contentQuality?.detail}</div>
+                      {qualityReason && (
+                        <div className="error-suggestion">
+                          {QUALITY_SUGGESTIONS[qualityReason]}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </td>
                 {vaultName && (
                   <td>
-                    {result.status === "success" && result.note && (
+                    {(result.status === "success" || result.status === "review") && result.note && (
                       <a
                         className="obsidian-link"
                         href={buildObsidianUri(

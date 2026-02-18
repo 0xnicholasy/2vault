@@ -37,10 +37,11 @@ export function ProcessingModal({ initialState, onClose }: ProcessingModalProps)
     chrome.runtime.sendMessage({ type: "CANCEL_PROCESSING" });
   }, []);
 
-  const TERMINAL_STATUSES = new Set(["done", "failed", "skipped"]);
+  const TERMINAL_STATUSES = new Set(["done", "failed", "skipped", "review"]);
   const total = state.urls.length;
   const completed = state.urls.filter((url) => TERMINAL_STATUSES.has(state.urlStatuses[url] ?? "queued")).length;
   const successCount = state.urls.filter((url) => state.urlStatuses[url] === "done").length;
+  const reviewCount = state.urls.filter((url) => state.urlStatuses[url] === "review").length;
   const failedCount = state.urls.filter((url) => state.urlStatuses[url] === "failed").length;
   const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
   const isDone = !state.active;
@@ -69,7 +70,7 @@ export function ProcessingModal({ initialState, onClose }: ProcessingModalProps)
             {completed} / {total} URLs
             {isDone && (
               <span className="progress-summary">
-                {" "}- {successCount} saved, {failedCount} failed
+                {" "}- {successCount} saved{reviewCount > 0 ? `, ${reviewCount} needs review` : ""}, {failedCount} failed
               </span>
             )}
           </div>

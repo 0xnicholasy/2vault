@@ -1,4 +1,4 @@
-import type { ErrorCategory } from "@/core/types";
+import type { ErrorCategory, ContentQualityReason } from "@/core/types";
 
 export const ERROR_SUGGESTIONS: Record<ErrorCategory, string> = {
   network: "Check your internet connection or try again later",
@@ -6,4 +6,12 @@ export const ERROR_SUGGESTIONS: Record<ErrorCategory, string> = {
   llm: "Check your OpenRouter API key in Settings or try again",
   vault: "Verify Obsidian is running with the REST API plugin enabled",
   unknown: "An unexpected error occurred. Try again or check the error details",
+};
+
+export const QUALITY_SUGGESTIONS: Record<ContentQualityReason, string> = {
+  "login-wall": "This page requires login. Try opening it in your browser and saving from there",
+  "bot-protection": "This page blocked automated access. Try the keyboard shortcut while viewing the page",
+  "soft-404": "This page appears to no longer exist",
+  "deleted-content": "The original content appears to have been deleted",
+  "insufficient-content": "Very little content was extracted. The page may require JavaScript or login",
 };

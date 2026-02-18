@@ -11,6 +11,7 @@ import { VaultClient } from "@/core/vault-client";
 import { OpenRouterProvider } from "@/core/openrouter-provider";
 import { buildVaultContext } from "@/core/vault-analyzer";
 import { fetchAndExtract } from "@/core/extractor";
+import { assessContentQuality } from "@/core/content-validator";
 import {
   formatNote,
   generateFilename,
@@ -187,6 +188,9 @@ async function processSingleUrl(
       };
     }
 
+    // Content quality validation
+    const contentQuality = assessContentQuality(extracted);
+
     // LLM processing
     if (isCancelled?.()) {
       return { url, status: "failed", error: "Cancelled" };
@@ -259,12 +263,14 @@ async function processSingleUrl(
       // Hub note failures are non-critical - log silently
     }
 
-    onProgress?.(url, "done");
+    const finalStatus = contentQuality.isLowQuality ? "review" : "success";
+    onProgress?.(url, contentQuality.isLowQuality ? "review" : "done");
     return {
       url,
-      status: "success",
+      status: finalStatus,
       note: processed,
       folder: processed.suggestedFolder,
+      contentQuality: contentQuality.isLowQuality ? contentQuality : undefined,
     };
   } catch (err) {
     const message =

@@ -9,7 +9,8 @@ export type UrlStatus =
   | "creating"
   | "done"
   | "failed"
-  | "skipped";
+  | "skipped"
+  | "review";
 
 /** Persisted processing state in chrome.storage.local */
 export interface ProcessingState {

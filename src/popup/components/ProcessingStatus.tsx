@@ -12,10 +12,11 @@ interface ProcessingStatusProps {
 export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatusProps) {
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
 
-  const TERMINAL_STATUSES = new Set(["done", "failed", "skipped"]);
+  const TERMINAL_STATUSES = new Set(["done", "failed", "skipped", "review"]);
   const total = state.urls.length;
   const completed = state.urls.filter((url) => TERMINAL_STATUSES.has(state.urlStatuses[url] ?? "queued")).length;
   const successCount = state.urls.filter((url) => state.urlStatuses[url] === "done").length;
+  const reviewCount = state.urls.filter((url) => state.urlStatuses[url] === "review").length;
   const failedCount = state.urls.filter((url) => state.urlStatuses[url] === "failed").length;
   const skippedCount = state.urls.filter((url) => state.urlStatuses[url] === "skipped").length;
   const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -56,7 +57,7 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
           {completed} / {total} URLs
           {isDone && (
             <span className="progress-summary">
-              {" "}- {successCount} saved, {failedCount} failed{skippedCount > 0 ? `, ${skippedCount} skipped` : ""}
+              {" "}- {successCount} saved{reviewCount > 0 ? `, ${reviewCount} needs review` : ""}, {failedCount} failed{skippedCount > 0 ? `, ${skippedCount} skipped` : ""}
             </span>
           )}
         </div>
@@ -68,7 +69,7 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
           const result = state.results.find((r) => r.url === url);
           const hasError = result?.status === "failed" && result.error;
           const isExpanded = expandedErrors.has(url);
-          const isSuccess = result?.status === "success";
+          const isSuccess = result?.status === "success" || result?.status === "review";
 
           return (
             <div key={`${index}-${url}`} className={`url-status-row url-status-${status}`}>
