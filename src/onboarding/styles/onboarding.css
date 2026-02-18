@@ -371,3 +371,156 @@ a:hover {
   justify-content: center;
   padding-top: 8px;
 }
+
+/* Sub-step checklist (ObsidianConnectionStep) */
+
+.sub-step-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sub-step {
+  border: 1px solid var(--ctp-surface1);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s, opacity 0.2s;
+}
+
+.sub-step-pending {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.sub-step-active {
+  border-color: var(--ctp-mauve);
+}
+
+.sub-step-completed {
+  border-color: var(--ctp-green);
+  opacity: 0.85;
+}
+
+.sub-step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  color: var(--ctp-text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sub-step-header:disabled {
+  cursor: default;
+}
+
+.sub-step-title {
+  flex: 1;
+}
+
+.sub-step-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  background: var(--ctp-surface0);
+  color: var(--ctp-subtext0);
+  border: 2px solid var(--ctp-surface1);
+  transition: all 0.2s;
+}
+
+.sub-step-badge-active {
+  background: var(--ctp-mauve);
+  color: var(--ctp-base);
+  border-color: var(--ctp-mauve);
+}
+
+.sub-step-badge-completed {
+  background: transparent;
+  color: var(--ctp-green);
+  border: none;
+  font-size: 22px;
+}
+
+.sub-step-body {
+  padding: 0 14px 14px 50px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sub-step-body p {
+  font-size: 13px;
+  color: var(--ctp-subtext0);
+  line-height: 1.5;
+}
+
+.sub-step-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sub-step-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ctp-subtext1);
+  cursor: pointer;
+}
+
+.sub-step-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ctp-mauve);
+  cursor: pointer;
+}
+
+.sub-step-hint {
+  font-size: 12px;
+  color: var(--ctp-overlay0);
+  font-style: italic;
+}
+
+/* Obsidian detection banner */
+
+.detection-banner {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(166, 227, 161, 0.1);
+  color: var(--ctp-green);
+  border: 1px solid rgba(166, 227, 161, 0.2);
+}
+
+/* URL config toggle */
+
+.url-config-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--ctp-subtext0);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.url-config-toggle:hover {
+  color: var(--ctp-text);
+}

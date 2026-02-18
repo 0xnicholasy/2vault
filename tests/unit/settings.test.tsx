@@ -289,11 +289,11 @@ describe("Settings", () => {
     expect(screen.getByText("Custom...")).toBeInTheDocument();
   });
 
-  it("selects HTTPS preset by default", () => {
+  it("selects HTTP preset by default", () => {
     render(<Settings />);
 
     const select = screen.getByLabelText("Obsidian Vault URL");
-    expect(select).toHaveValue("https://localhost:27124");
+    expect(select).toHaveValue("http://localhost:27123");
   });
 
   it("shows custom input when Custom is selected", async () => {

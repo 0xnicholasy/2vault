@@ -1,4 +1,4 @@
-export const DEFAULT_VAULT_URL = "https://localhost:27124";
+export const DEFAULT_VAULT_URL = "http://localhost:27123";
 export const DEFAULT_FOLDER = "Inbox";
 export const VAULT_CONTEXT_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 export const MAX_FOLDERS = 50;
@@ -10,6 +10,12 @@ export const VAULT_URL_PRESETS = [
   { label: "HTTP (localhost:27123)", value: "http://localhost:27123" },
   { label: "HTTPS (localhost:27124)", value: "https://localhost:27124" },
   { label: "Custom...", value: "custom" },
+] as const;
+
+export const SUMMARY_DETAIL_OPTIONS = [
+  { value: "brief", label: "Quick capture", description: "1-2 sentence summary, 2-3 key points" },
+  { value: "standard", label: "Standard", description: "2-3 sentence summary, 3-5 key points" },
+  { value: "detailed", label: "Deep dive", description: "Detailed summary, 5-8 key points" },
 ] as const;
 
 export const PARA_FOLDERS = ["Projects", "Areas", "Resources", "Archive"] as const;
