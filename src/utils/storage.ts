@@ -1,4 +1,4 @@
-import type { Config, VaultContext, VaultOrganization, TagGroup, ProcessingResult } from "@/core/types.ts";
+import type { Config, VaultContext, VaultOrganization, TagGroup, ProcessingResult, SummaryDetailLevel } from "@/core/types.ts";
 import type { ProcessingState } from "@/background/messages.ts";
 
 interface SyncStorage {
@@ -10,6 +10,7 @@ interface SyncStorage {
   vaultName: string;
   vaultOrganization: VaultOrganization;
   tagGroups: TagGroup[];
+  summaryDetailLevel: SummaryDetailLevel;
   onboardingComplete: boolean;
   onboardingStep: number;
 }
@@ -51,7 +52,7 @@ export async function setLocalStorage<K extends keyof LocalStorage>(
 }
 
 export async function getConfig(): Promise<Config> {
-  const [apiKey, llmProvider, vaultUrl, vaultApiKey, defaultFolder, vaultName, vaultOrganization, tagGroups] =
+  const [apiKey, llmProvider, vaultUrl, vaultApiKey, defaultFolder, vaultName, vaultOrganization, tagGroups, summaryDetailLevel] =
     await Promise.all([
       getSyncStorage("apiKey"),
       getSyncStorage("llmProvider"),
@@ -61,6 +62,7 @@ export async function getConfig(): Promise<Config> {
       getSyncStorage("vaultName"),
       getSyncStorage("vaultOrganization"),
       getSyncStorage("tagGroups"),
+      getSyncStorage("summaryDetailLevel"),
     ]);
 
   return {
@@ -72,6 +74,7 @@ export async function getConfig(): Promise<Config> {
     vaultName: vaultName ?? "",
     vaultOrganization: vaultOrganization ?? "para",
     tagGroups: tagGroups ?? [],
+    summaryDetailLevel: summaryDetailLevel ?? "standard",
   };
 }
 

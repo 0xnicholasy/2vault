@@ -21,7 +21,7 @@ import {
 export type ProgressCallback = (url: string, status: string) => void;
 
 export function createDefaultProvider(config: Config): LLMProvider {
-  return new OpenRouterProvider(config.apiKey);
+  return new OpenRouterProvider(config.apiKey, config.summaryDetailLevel);
 }
 
 export type ExtractFn = (url: string) => Promise<ExtractedContent>;

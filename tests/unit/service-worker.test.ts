@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 
 // Hoisted mocks for core modules
 const {
@@ -223,14 +223,40 @@ const TEST_CONFIG = {
   defaultFolder: "Inbox",
 };
 
-beforeEach(async () => {
-  vi.clearAllMocks();
-  commandListener = null;
-  messageListener = null;
-  installedListener = null;
-  contextMenuClickListener = null;
+// Import once to register listeners (avoids re-importing the entire module
+// graph on every test which can cause beforeEach hook timeouts).
+beforeAll(async () => {
   setupChromeMock();
+  vi.resetModules();
+  await import("@/background/service-worker");
+});
 
+beforeEach(() => {
+  // Reset only the hoisted mocks (NOT vi.clearAllMocks() which would wipe
+  // chrome mock implementations and the captured listeners).
+  mockProcessUrls.mockReset();
+  mockGetConfig.mockReset();
+  mockGetProcessingState.mockReset();
+  mockSetProcessingState.mockReset();
+  mockClearProcessingState.mockReset();
+  mockGetLocalStorage.mockReset();
+  mockSetLocalStorage.mockReset();
+  mockFetchAndExtract.mockReset();
+  mockCreateFailedExtraction.mockReset();
+
+  // Re-apply default mock implementations
+  mockCreateFailedExtraction.mockImplementation((url: string, error: string) => ({
+    url,
+    title: "",
+    content: "",
+    author: null,
+    datePublished: null,
+    wordCount: 0,
+    type: "article" as const,
+    platform: "web" as const,
+    status: "failed" as const,
+    error,
+  }));
   mockGetConfig.mockResolvedValue(TEST_CONFIG);
   mockGetProcessingState.mockResolvedValue(null);
   mockSetProcessingState.mockResolvedValue(undefined);
@@ -241,9 +267,28 @@ beforeEach(async () => {
     { url: "https://example.com", status: "success", folder: "Inbox" },
   ]);
 
-  // Re-import to register listeners
-  vi.resetModules();
-  await import("@/background/service-worker");
+  // Clear call history on chrome mock functions so assertions are per-test
+  vi.mocked(chrome.tabs.create).mockClear();
+  vi.mocked(chrome.tabs.remove).mockClear();
+  vi.mocked(chrome.tabs.sendMessage).mockClear();
+  vi.mocked(chrome.notifications.create).mockClear();
+  vi.mocked(chrome.notifications.clear).mockClear();
+  vi.mocked(chrome.contextMenus.create).mockClear();
+  vi.mocked(chrome.windows.create).mockClear();
+  vi.mocked(chrome.scripting.executeScript).mockClear();
+  vi.mocked(chrome.action.openPopup).mockClear();
+
+  // Restore default chrome.tabs.query implementation (some tests override it)
+  (chrome.tabs.query as ReturnType<typeof vi.fn>).mockImplementation(
+    (
+      _query: chrome.tabs.QueryInfo,
+      callback: (tabs: chrome.tabs.Tab[]) => void
+    ) => {
+      callback([
+        { id: 1, url: "https://example.com/current-page" } as chrome.tabs.Tab,
+      ]);
+    }
+  );
 });
 
 describe("Service worker - message handling", () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import type { ProcessingResult } from "@/core/types";
 import type { ProcessingState } from "@/background/messages";
 
@@ -237,20 +237,41 @@ function failedResult(
 // Setup
 // ---------------------------------------------------------------------------
 
-beforeEach(async () => {
-  vi.clearAllMocks();
-  commandListener = null;
-  messageListener = null;
+// Import once to register listeners (avoids re-importing the entire module
+// graph on every test which can cause beforeEach hook timeouts).
+beforeAll(async () => {
   setupChromeMock();
+  vi.resetModules();
+  await import("@/background/service-worker");
+});
 
+beforeEach(() => {
+  // Reset only the hoisted mocks (NOT vi.clearAllMocks() which would wipe
+  // chrome mock implementations and the captured listeners).
+  mockProcessUrls.mockReset();
+  mockGetConfig.mockReset();
+  mockGetProcessingState.mockReset();
+  mockSetProcessingState.mockReset();
+  mockGetLocalStorage.mockReset();
+  mockSetLocalStorage.mockReset();
+
+  // Re-apply default mock implementations
   mockGetConfig.mockResolvedValue(TEST_CONFIG);
   mockGetProcessingState.mockResolvedValue(null);
   mockSetProcessingState.mockResolvedValue(undefined);
   mockGetLocalStorage.mockResolvedValue([]);
   mockSetLocalStorage.mockResolvedValue(undefined);
 
-  vi.resetModules();
-  await import("@/background/service-worker");
+  // Clear call history on chrome mock functions so assertions are per-test
+  vi.mocked(chrome.tabs.create).mockClear();
+  vi.mocked(chrome.tabs.remove).mockClear();
+  vi.mocked(chrome.tabs.sendMessage).mockClear();
+  vi.mocked(chrome.notifications.create).mockClear();
+  vi.mocked(chrome.notifications.clear).mockClear();
+  vi.mocked(chrome.contextMenus.create).mockClear();
+  vi.mocked(chrome.windows.create).mockClear();
+  vi.mocked(chrome.scripting.executeScript).mockClear();
+  vi.mocked(chrome.action.openPopup).mockClear();
 });
 
 // ---------------------------------------------------------------------------

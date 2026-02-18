@@ -42,11 +42,15 @@ export function CompletionStep({ data, onComplete }: Props) {
           <IoCheckmarkCircle className="checklist-icon" />
           <span>Organization: {data.vaultOrganization === "para" ? "PARA" : "Custom"}</span>
         </div>
+        <div className="checklist-item">
+          <IoCheckmarkCircle className="checklist-icon" />
+          <span>Summary detail: Standard</span>
+        </div>
       </div>
 
       <div className="completion-nudge">
         <p>
-          Pick a small bookmark folder (5-10 bookmarks) and click <strong>Process</strong> to see 2Vault in action. You can always adjust settings later.
+          Pick a small bookmark folder (5-10 bookmarks) and click <strong>Process</strong> to see 2Vault in action. You can adjust summary detail level and other settings anytime.
         </p>
       </div>
 

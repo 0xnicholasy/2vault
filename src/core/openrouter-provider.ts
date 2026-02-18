@@ -2,6 +2,7 @@ import type {
   ExtractedContent,
   LLMProvider,
   ProcessedNote,
+  SummaryDetailLevel,
   VaultContext,
 } from "@/core/types";
 import { LLMProcessingError } from "@/core/types";
@@ -10,6 +11,8 @@ import {
   buildCategorizationPrompt,
   validateSummarizationResult,
   validateCategorizationResult,
+  getSummarizeFunctionSchema,
+  getMaxTokensForDetailLevel,
 } from "@/core/llm-shared";
 import type { SummarizationResult } from "@/core/llm-shared";
 
@@ -28,34 +31,6 @@ export async function testOpenRouterConnection(apiKey: string): Promise<boolean>
   });
   return response.ok;
 }
-
-const SUMMARIZE_FUNCTION = {
-  type: "function" as const,
-  function: {
-    name: "summarize_content",
-    description:
-      "Summarize web content into a structured format for an Obsidian note.",
-    parameters: {
-      type: "object",
-      properties: {
-        title: {
-          type: "string",
-          description: "A concise, descriptive title for the note",
-        },
-        summary: {
-          type: "string",
-          description: "A 2-3 sentence summary of the content",
-        },
-        keyTakeaways: {
-          type: "array",
-          items: { type: "string" },
-          description: "3-5 key takeaways or insights from the content",
-        },
-      },
-      required: ["title", "summary", "keyTakeaways"],
-    },
-  },
-};
 
 const CATEGORIZE_FUNCTION = {
   type: "function" as const,
@@ -141,9 +116,11 @@ function extractToolCallResult(
 
 export class OpenRouterProvider implements LLMProvider {
   private apiKey: string;
+  private detailLevel: SummaryDetailLevel;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, detailLevel: SummaryDetailLevel = "standard") {
     this.apiKey = apiKey;
+    this.detailLevel = detailLevel;
   }
 
   async processContent(
@@ -173,8 +150,9 @@ export class OpenRouterProvider implements LLMProvider {
   private async callApi(
     model: string,
     messages: OpenRouterMessage[],
-    tools: Array<typeof SUMMARIZE_FUNCTION | typeof CATEGORIZE_FUNCTION>,
-    toolChoice: { type: "function"; function: { name: string } }
+    tools: Array<ReturnType<typeof getSummarizeFunctionSchema> | typeof CATEGORIZE_FUNCTION>,
+    toolChoice: { type: "function"; function: { name: string } },
+    maxTokens: number = 1024
   ): Promise<OpenRouterResponse> {
     const response = await fetch(OPENROUTER_API_URL, {
       method: "POST",
@@ -189,7 +167,7 @@ export class OpenRouterProvider implements LLMProvider {
         messages,
         tools,
         tool_choice: toolChoice,
-        max_tokens: 1024,
+        max_tokens: maxTokens,
       }),
     });
 
@@ -206,13 +184,17 @@ export class OpenRouterProvider implements LLMProvider {
   private async summarize(
     content: ExtractedContent
   ): Promise<SummarizationResult> {
+    const summarizeFunction = getSummarizeFunctionSchema(this.detailLevel);
+    const maxTokens = getMaxTokensForDetailLevel(this.detailLevel);
+
     let response: OpenRouterResponse;
     try {
       response = await this.callApi(
         SUMMARIZATION_MODEL,
-        [{ role: "user", content: buildSummarizationPrompt(content) }],
-        [SUMMARIZE_FUNCTION],
-        { type: "function", function: { name: "summarize_content" } }
+        [{ role: "user", content: buildSummarizationPrompt(content, this.detailLevel) }],
+        [summarizeFunction],
+        { type: "function", function: { name: "summarize_content" } },
+        maxTokens
       );
     } catch (err) {
       throw new LLMProcessingError(

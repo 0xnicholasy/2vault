@@ -1,4 +1,4 @@
-import type { ExtractedContent, VaultContext } from "@/core/types";
+import type { ExtractedContent, SummaryDetailLevel, VaultContext } from "@/core/types";
 
 export interface SummarizationResult {
   title: string;
@@ -11,13 +11,84 @@ export interface CategorizationResult {
   suggestedTags: string[];
 }
 
-export function buildSummarizationPrompt(content: ExtractedContent): string {
+const DETAIL_LEVEL_INSTRUCTIONS: Record<SummaryDetailLevel, string> = {
+  brief:
+    "Write a 1-2 sentence summary. List 2-3 key takeaways as single short sentences.",
+  standard:
+    "Write a 2-3 sentence summary. List 3-5 key takeaways or insights.",
+  detailed:
+    "Write a 4-6 sentence summary that captures the nuance and key arguments. List 5-8 key takeaways with enough context that each point is useful standalone.",
+};
+
+export function getMaxTokensForDetailLevel(level: SummaryDetailLevel): number {
+  switch (level) {
+    case "brief":
+      return 512;
+    case "standard":
+      return 1024;
+    case "detailed":
+      return 1536;
+  }
+}
+
+export function getSummarizeFunctionSchema(level: SummaryDetailLevel) {
+  const descriptions: Record<SummaryDetailLevel, { summary: string; takeaways: string }> = {
+    brief: {
+      summary: "A 1-2 sentence summary of the content",
+      takeaways: "2-3 key takeaways as short sentences",
+    },
+    standard: {
+      summary: "A 2-3 sentence summary of the content",
+      takeaways: "3-5 key takeaways or insights from the content",
+    },
+    detailed: {
+      summary: "A 4-6 sentence summary capturing the nuance and key arguments",
+      takeaways: "5-8 key takeaways with enough standalone context",
+    },
+  };
+
+  const desc = descriptions[level];
+  return {
+    type: "function" as const,
+    function: {
+      name: "summarize_content",
+      description:
+        "Summarize web content into a structured format for an Obsidian note.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "A concise, descriptive title for the note",
+          },
+          summary: {
+            type: "string",
+            description: desc.summary,
+          },
+          keyTakeaways: {
+            type: "array",
+            items: { type: "string" },
+            description: desc.takeaways,
+          },
+        },
+        required: ["title", "summary", "keyTakeaways"],
+      },
+    },
+  };
+}
+
+export function buildSummarizationPrompt(
+  content: ExtractedContent,
+  detailLevel: SummaryDetailLevel = "standard"
+): string {
   const parts: Array<string | null> = [
     `Title: ${content.title}`,
     content.author ? `Author: ${content.author}` : null,
     content.datePublished ? `Published: ${content.datePublished}` : null,
     `URL: ${content.url}`,
     `Type: ${content.type} (${content.platform})`,
+    "",
+    `Summary instructions: ${DETAIL_LEVEL_INSTRUCTIONS[detailLevel]}`,
     "",
   ];
 

@@ -15,6 +15,8 @@ export interface ExtractedContent {
 
 export type VaultOrganization = "para" | "custom";
 
+export type SummaryDetailLevel = "brief" | "standard" | "detailed";
+
 export interface TagGroup {
   name: string;
   tags: string[];
@@ -92,6 +94,7 @@ export interface Config {
   vaultName: string;
   vaultOrganization: VaultOrganization;
   tagGroups: TagGroup[];
+  summaryDetailLevel: SummaryDetailLevel;
 }
 
 /** Response from GET /vault/ and GET /vault/{dir}/ - returns plain string paths */

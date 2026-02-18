@@ -3,8 +3,10 @@ import {
   buildSummarizationPrompt,
   buildCategorizationPrompt,
   validateCategorizationResult,
+  getMaxTokensForDetailLevel,
+  getSummarizeFunctionSchema,
 } from "@/core/llm-shared";
-import type { VaultContext, ExtractedContent } from "@/core/types";
+import type { VaultContext, ExtractedContent, SummaryDetailLevel } from "@/core/types";
 
 function createSummarized() {
   return {
@@ -167,5 +169,92 @@ describe("validateCategorizationResult - tag groups warning", () => {
 
     expect(consoleSpy).not.toHaveBeenCalled();
     consoleSpy.mockRestore();
+  });
+});
+
+// -- Summary detail level in summarization prompt ----------------------------
+
+describe("buildSummarizationPrompt - detail level", () => {
+  it("includes brief instructions for brief level", () => {
+    const prompt = buildSummarizationPrompt(createContent(), "brief");
+    expect(prompt).toContain("1-2 sentence summary");
+    expect(prompt).toContain("2-3 key takeaways");
+  });
+
+  it("includes standard instructions for standard level", () => {
+    const prompt = buildSummarizationPrompt(createContent(), "standard");
+    expect(prompt).toContain("2-3 sentence summary");
+    expect(prompt).toContain("3-5 key takeaways");
+  });
+
+  it("includes detailed instructions for detailed level", () => {
+    const prompt = buildSummarizationPrompt(createContent(), "detailed");
+    expect(prompt).toContain("4-6 sentence summary");
+    expect(prompt).toContain("5-8 key takeaways");
+  });
+
+  it("defaults to standard when no level provided", () => {
+    const prompt = buildSummarizationPrompt(createContent());
+    expect(prompt).toContain("2-3 sentence summary");
+    expect(prompt).toContain("3-5 key takeaways");
+  });
+
+  it("still includes thread hints with detail level set", () => {
+    const content = createContent({
+      platform: "x",
+      content: "## Thread\n\nFirst tweet\n\n## Top Replies\n\n**@user:** Reply",
+    });
+    const prompt = buildSummarizationPrompt(content, "detailed");
+    expect(prompt).toContain("4-6 sentence summary");
+    expect(prompt).toContain("Summarize the author's thread first");
+  });
+});
+
+// -- getMaxTokensForDetailLevel -----------------------------------------------
+
+describe("getMaxTokensForDetailLevel", () => {
+  it("returns 512 for brief", () => {
+    expect(getMaxTokensForDetailLevel("brief")).toBe(512);
+  });
+
+  it("returns 1024 for standard", () => {
+    expect(getMaxTokensForDetailLevel("standard")).toBe(1024);
+  });
+
+  it("returns 1536 for detailed", () => {
+    expect(getMaxTokensForDetailLevel("detailed")).toBe(1536);
+  });
+});
+
+// -- getSummarizeFunctionSchema -----------------------------------------------
+
+describe("getSummarizeFunctionSchema", () => {
+  const levels: SummaryDetailLevel[] = ["brief", "standard", "detailed"];
+
+  for (const level of levels) {
+    it(`returns valid schema for ${level}`, () => {
+      const schema = getSummarizeFunctionSchema(level);
+      expect(schema.type).toBe("function");
+      expect(schema.function.name).toBe("summarize_content");
+      expect(schema.function.parameters.required).toEqual(["title", "summary", "keyTakeaways"]);
+    });
+  }
+
+  it("brief schema describes 1-2 sentences", () => {
+    const schema = getSummarizeFunctionSchema("brief");
+    expect(schema.function.parameters.properties.summary.description).toContain("1-2");
+    expect(schema.function.parameters.properties.keyTakeaways.description).toContain("2-3");
+  });
+
+  it("standard schema describes 2-3 sentences", () => {
+    const schema = getSummarizeFunctionSchema("standard");
+    expect(schema.function.parameters.properties.summary.description).toContain("2-3");
+    expect(schema.function.parameters.properties.keyTakeaways.description).toContain("3-5");
+  });
+
+  it("detailed schema describes 4-6 sentences", () => {
+    const schema = getSummarizeFunctionSchema("detailed");
+    expect(schema.function.parameters.properties.summary.description).toContain("4-6");
+    expect(schema.function.parameters.properties.keyTakeaways.description).toContain("5-8");
   });
 });

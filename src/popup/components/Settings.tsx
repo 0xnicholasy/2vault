@@ -8,8 +8,9 @@ import {
   DEFAULT_FOLDER,
   PARA_DESCRIPTIONS,
   VAULT_URL_PRESETS,
+  SUMMARY_DETAIL_OPTIONS,
 } from "@/utils/config";
-import type { VaultOrganization, TagGroup } from "@/core/types";
+import type { VaultOrganization, TagGroup, SummaryDetailLevel } from "@/core/types";
 import { TagGroupEditor } from "@/popup/components/TagGroupEditor";
 import { validateOpenRouterKey, validateVaultApiKey } from "@/utils/validation";
 
@@ -25,6 +26,8 @@ export function Settings() {
   const [vaultOrganization, setVaultOrganization] =
     useState<VaultOrganization>("para");
   const [tagGroups, setTagGroups] = useState<TagGroup[]>([]);
+  const [summaryDetailLevel, setSummaryDetailLevel] =
+    useState<SummaryDetailLevel>("standard");
 
   const [showApiKey, setShowApiKey] = useState(false);
   const [showVaultApiKey, setShowVaultApiKey] = useState(false);
@@ -46,6 +49,7 @@ export function Settings() {
       setVaultName(config.vaultName);
       setVaultOrganization(config.vaultOrganization);
       setTagGroups(config.tagGroups);
+      setSummaryDetailLevel(config.summaryDetailLevel);
       // Derive preset from stored URL
       const matchingPreset = VAULT_URL_PRESETS.find(
         (p) => p.value === config.vaultUrl
@@ -90,6 +94,7 @@ export function Settings() {
       setSyncStorage("vaultName", vaultName),
       setSyncStorage("vaultOrganization", vaultOrganization),
       setSyncStorage("tagGroups", tagGroups),
+      setSyncStorage("summaryDetailLevel", summaryDetailLevel),
     ]);
     setDirty(false);
     setSaveStatus("saved");
@@ -101,6 +106,7 @@ export function Settings() {
     vaultName,
     vaultOrganization,
     tagGroups,
+    summaryDetailLevel,
   ]);
 
   return (
@@ -269,6 +275,30 @@ export function Settings() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="form-group">
+        <label>Summary Detail Level</label>
+        <div className="radio-group">
+          {SUMMARY_DETAIL_OPTIONS.map((option) => (
+            <label key={option.value} className="radio-option">
+              <input
+                type="radio"
+                name="summaryDetailLevel"
+                value={option.value}
+                checked={summaryDetailLevel === option.value}
+                onChange={() => {
+                  setSummaryDetailLevel(option.value);
+                  markDirty();
+                }}
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+        <span className="form-hint">
+          {SUMMARY_DETAIL_OPTIONS.find((o) => o.value === summaryDetailLevel)?.description}
+        </span>
       </div>
 
       <div className="form-group">

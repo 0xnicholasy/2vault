@@ -109,6 +109,7 @@ describe("getConfig", () => {
       vaultName: "",
       vaultOrganization: "para",
       tagGroups: [],
+      summaryDetailLevel: "standard",
     });
   });
 
