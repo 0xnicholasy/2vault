@@ -253,10 +253,11 @@ test.describe("Status Tab", () => {
     // Expand error row
     await page.click(".error-row-expandable");
     await expect(page.locator(".error-expanded-details")).toBeVisible();
+    const errorDetails = page.locator(".error-expanded-details");
 
     // Verify category-specific elements
-    await expect(page.locator('button:has-text("Retry")')).toBeVisible();
-    await expect(page.locator('button:has-text("Copy URL")')).toBeVisible();
+    await expect(errorDetails.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+    await expect(errorDetails.getByRole("button", { name: "Copy URL", exact: true })).toBeVisible();
   });
 
   test("login-required error shows no retry button", async ({ popupPage: page }) => {
@@ -280,11 +281,12 @@ test.describe("Status Tab", () => {
     // Expand error row
     await page.click(".error-row-expandable");
     await expect(page.locator(".error-expanded-details")).toBeVisible();
+    const errorDetails = page.locator(".error-expanded-details");
 
     // Login-required errors should NOT show retry button (not retryable)
-    await expect(page.locator('button:has-text("Retry")')).not.toBeVisible();
-    await expect(page.locator('button:has-text("Open")')).toBeVisible();
-    await expect(page.locator('button:has-text("Copy URL")')).toBeVisible();
+    await expect(errorDetails.getByRole("button", { name: "Retry", exact: true })).toHaveCount(0);
+    await expect(errorDetails.getByRole("button", { name: "Open", exact: true })).toBeVisible();
+    await expect(errorDetails.getByRole("button", { name: "Copy URL", exact: true })).toBeVisible();
   });
 
   test("vault error shows settings button", async ({ popupPage: page }) => {
@@ -308,10 +310,11 @@ test.describe("Status Tab", () => {
     // Expand error row
     await page.click(".error-row-expandable");
     await expect(page.locator(".error-expanded-details")).toBeVisible();
+    const errorDetails = page.locator(".error-expanded-details");
 
     // Vault errors should show Settings button
-    await expect(page.locator('button:has-text("Settings")')).toBeVisible();
-    await expect(page.locator('button:has-text("Retry")')).toBeVisible();
+    await expect(errorDetails.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
+    await expect(errorDetails.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
   });
 
   test("timeout error shows retry button", async ({ popupPage: page }) => {
@@ -335,9 +338,10 @@ test.describe("Status Tab", () => {
     // Expand error row
     await page.click(".error-row-expandable");
     await expect(page.locator(".error-expanded-details")).toBeVisible();
+    const errorDetails = page.locator(".error-expanded-details");
 
     // Timeout errors are retryable
-    await expect(page.locator('button:has-text("Retry")')).toBeVisible();
+    await expect(errorDetails.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
   });
 
   test("multiple different error categories display correctly", async ({ popupPage: page }) => {

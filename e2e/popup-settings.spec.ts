@@ -8,7 +8,7 @@ test.describe("Settings Tab", () => {
   test("navigates to Settings tab and shows form fields", async ({ popupPage: page }) => {
     await page.click('button[role="tab"]:has-text("Settings")');
     await expect(page.locator("#apiKey")).toBeVisible();
-    await expect(page.locator("#vaultUrlPreset")).toBeVisible();
+    await expect(page.getByText("http://localhost:27123")).toBeVisible();
     await expect(page.locator("#vaultApiKey")).toBeVisible();
     await expect(page.locator("#vaultName")).toBeVisible();
   });
@@ -69,18 +69,11 @@ test.describe("Settings Tab", () => {
     await expect(input).toHaveAttribute("type", "password");
   });
 
-  test("vault URL preset dropdown changes URL", async ({ popupPage: page }) => {
+  test("vault URL is fixed and not editable", async ({ popupPage: page }) => {
     await page.click('button[role="tab"]:has-text("Settings")');
-    await page.selectOption("#vaultUrlPreset", "http://localhost:27123");
-    // Custom input should NOT be visible for non-custom presets
-    await expect(page.locator("#vaultUrl")).not.toBeVisible();
-  });
-
-  test("selecting custom vault URL shows freeform input", async ({ popupPage: page }) => {
-    await page.click('button[role="tab"]:has-text("Settings")');
-    await page.selectOption("#vaultUrlPreset", "custom");
-    await expect(page.locator("#vaultUrl")).toBeVisible();
-    await page.fill("#vaultUrl", "https://my-server:9999");
+    await expect(page.locator("#vaultUrlPreset")).toHaveCount(0);
+    await expect(page.locator("#vaultUrl")).toHaveCount(0);
+    await expect(page.getByText("http://localhost:27123")).toBeVisible();
   });
 
   test("PARA organization mode shows folder descriptions", async ({ popupPage: page }) => {
@@ -98,24 +91,60 @@ test.describe("Settings Tab", () => {
     await expect(page.locator(".para-description")).not.toBeVisible();
   });
 
-  test("Save Settings button disabled until changes made", async ({ popupPage: page }) => {
+  test("Save Settings button is enabled when form has no validation errors", async ({ popupPage: page }) => {
     await page.click('button[role="tab"]:has-text("Settings")');
     const saveBtn = page.locator('button:has-text("Save Settings")');
-    await expect(saveBtn).toBeDisabled();
+    await expect(saveBtn).toBeEnabled();
 
-    // Make a change
+    // Make a change and ensure it remains actionable
     await page.fill("#vaultName", "NewVault");
     await expect(saveBtn).toBeEnabled();
   });
 
   test("Save Settings persists to chrome.storage.sync", async ({ popupPage: page }) => {
+    await page.route("**/*", async (route) => {
+      const requestUrl = route.request().url();
+      const url = new URL(requestUrl);
+
+      if (requestUrl.includes("openrouter.ai/api/v1/auth/key")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: "{}",
+        });
+        return;
+      }
+
+      if (url.origin === "http://localhost:27123") {
+        if (url.pathname === "/") {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ status: "OK", authenticated: true }),
+          });
+          return;
+        }
+
+        if (url.pathname === "/search/simple/") {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: "[]",
+          });
+          return;
+        }
+      }
+
+      await route.continue();
+    });
+
     await page.click('button[role="tab"]:has-text("Settings")');
     await page.fill("#apiKey", "sk-or-my-test-key-12345678");
     await page.fill("#vaultApiKey", "vault-key-12345");
     await page.fill("#vaultName", "MyVault");
 
     await page.click('button:has-text("Save Settings")');
-    await expect(page.locator(".status-success")).toContainText("Saved");
+    await expect(page.locator(".status-success")).toContainText("Settings saved successfully");
 
     const stored = await readSyncStorage(page, [
       "apiKey",
@@ -133,19 +162,19 @@ test.describe("Settings Tab", () => {
     await expect(page.locator('button:has-text("Save Settings")')).toBeDisabled();
   });
 
-  test("Test Connections button shows testing state", async ({ popupPage: page }) => {
+  test("Save Settings button shows progress or connection results", async ({ popupPage: page }) => {
     await page.click('button[role="tab"]:has-text("Settings")');
-    await page.click('button:has-text("Test Connections")');
+    await page.click('button:has-text("Save Settings")');
 
-    // Should show testing... or results
+    // Should show transient save state or resulting connection errors
     await expect(
-      page.locator(".connection-results").or(page.locator('button:has-text("Testing...")'))
+      page.locator(".connection-results").or(page.locator('button:has-text("Saving...")'))
     ).toBeVisible();
   });
 
-  test("Test Connections shows error when no keys configured", async ({ popupPage: page }) => {
+  test("Save Settings shows error when no keys configured", async ({ popupPage: page }) => {
     await page.click('button[role="tab"]:has-text("Settings")');
-    await page.click('button:has-text("Test Connections")');
+    await page.click('button:has-text("Save Settings")');
 
     // Wait for results
     await expect(page.locator(".connection-results")).toBeVisible({ timeout: 10_000 });
