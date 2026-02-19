@@ -185,3 +185,62 @@ describe("assessContentQuality", () => {
     expect(result.detail).toContain("enable javascript and cookies");
   });
 });
+
+// -- error-page reason (HIGH) -------------------------------------------------
+
+describe("assessContentQuality - error-page reason", () => {
+  it("detects error-page content quality reason for X 'Something went wrong' page", () => {
+    const result = assessContentQuality(
+      makeContent({
+        content:
+          "Something went wrong. Try reloading. Don't worry, it's not your fault.",
+        platform: "x",
+        type: "social-media",
+        wordCount: 15,
+      })
+    );
+    expect(result.isLowQuality).toBe(true);
+    expect(result.reason).toBe("error-page");
+  });
+
+  it("returns 'error-page' for suspended account X page", () => {
+    const result = assessContentQuality(
+      makeContent({
+        content:
+          "Caution: This post is from a suspended account. Learn more about suspended accounts.",
+        platform: "x",
+        type: "social-media",
+        wordCount: 15,
+      })
+    );
+    expect(result.isLowQuality).toBe(true);
+    expect(result.reason).toBe("error-page");
+  });
+
+  it("returns 'error-page' for X rate limit page", () => {
+    const result = assessContentQuality(
+      makeContent({
+        content:
+          "You have exceeded the rate limit. Please wait a few minutes before retrying.",
+        platform: "x",
+        type: "social-media",
+        wordCount: 15,
+      })
+    );
+    expect(result.isLowQuality).toBe(true);
+    expect(result.reason).toBe("error-page");
+  });
+
+  it("does NOT flag 'error-page' for web articles that mention X error pages", () => {
+    const result = assessContentQuality(
+      makeContent({
+        content:
+          "A guide to debugging when Twitter shows 'Something went wrong'. The error usually means the API is down.",
+        platform: "web",
+        type: "article",
+        wordCount: 25,
+      })
+    );
+    expect(result.reason).not.toBe("error-page");
+  });
+});

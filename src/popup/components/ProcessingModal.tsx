@@ -37,12 +37,14 @@ export function ProcessingModal({ initialState, onClose }: ProcessingModalProps)
     chrome.runtime.sendMessage({ type: "CANCEL_PROCESSING" });
   }, []);
 
-  const TERMINAL_STATUSES = new Set(["done", "failed", "skipped", "review"]);
+  const TERMINAL_STATUSES = new Set(["done", "failed", "skipped", "review", "timeout", "cancelled"]);
   const total = state.urls.length;
   const completed = state.urls.filter((url) => TERMINAL_STATUSES.has(state.urlStatuses[url] ?? "queued")).length;
   const successCount = state.urls.filter((url) => state.urlStatuses[url] === "done").length;
   const reviewCount = state.urls.filter((url) => state.urlStatuses[url] === "review").length;
   const failedCount = state.urls.filter((url) => state.urlStatuses[url] === "failed").length;
+  const timeoutCount = state.urls.filter((url) => state.urlStatuses[url] === "timeout").length;
+  const cancelledCount = state.urls.filter((url) => state.urlStatuses[url] === "cancelled").length;
   const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
   const isDone = !state.active;
 
@@ -50,7 +52,7 @@ export function ProcessingModal({ initialState, onClose }: ProcessingModalProps)
     <div className="processing-modal-backdrop">
       <div className="processing-modal">
         <div className="processing-modal-header">
-          <h2>{isDone ? "Processing Complete" : "Processing Bookmarks"}</h2>
+          <h2>{isDone ? (state.cancelled ? "Processing Cancelled" : "Processing Complete") : "Processing Bookmarks"}</h2>
         </div>
 
         {state.error && (
@@ -70,7 +72,7 @@ export function ProcessingModal({ initialState, onClose }: ProcessingModalProps)
             {completed} / {total} URLs
             {isDone && (
               <span className="progress-summary">
-                {" "}- {successCount} saved{reviewCount > 0 ? `, ${reviewCount} needs review` : ""}, {failedCount} failed
+                {" "}- {successCount} saved{reviewCount > 0 ? `, ${reviewCount} needs review` : ""}{timeoutCount > 0 ? `, ${timeoutCount} timed out` : ""}{failedCount > 0 ? `, ${failedCount} failed` : ""}{cancelledCount > 0 ? `, ${cancelledCount} cancelled` : ""}
               </span>
             )}
           </div>
@@ -80,7 +82,7 @@ export function ProcessingModal({ initialState, onClose }: ProcessingModalProps)
           {state.urls.map((url, index) => {
             const status = getUrlStatus(url, state);
             const result = state.results.find((r) => r.url === url);
-            const errorMsg = result?.status === "failed" ? result.error : undefined;
+            const errorMsg = (result?.status === "failed" || result?.status === "timeout") ? result.error : undefined;
             return (
               <div key={`${index}-${url}`} className={`url-status-row url-status-${status}`}>
                 <div className="url-status-main">

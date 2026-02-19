@@ -354,7 +354,8 @@ function fallbackExtraction(url: string, reason: string): ExtractedContent {
     wordCount: bodyText.split(/\s+/).filter(Boolean).length,
     type: "social-media",
     platform: "reddit",
-    status: "success",
+    status: "failed",
+    error: `Reddit extraction failed (fallback): ${reason}`,
   };
 }
 
@@ -385,23 +386,30 @@ async function waitForPostElement(): Promise<Element | null> {
   return null;
 }
 
-// Listen for extraction requests from service worker
-chrome.runtime.onMessage.addListener(
-  (
-    message: ExtractContentMessage,
-    _sender: chrome.runtime.MessageSender,
-    sendResponse: (response: ExtractionResultMessage) => void
-  ) => {
-    if (message.type === "EXTRACT_CONTENT") {
-      waitForPostElement().then(() => {
-        const result = extractFromDom();
-        sendResponse({ type: "EXTRACTION_RESULT", data: result });
-      });
-      return true; // Keep message channel open for async response
+// Prevent duplicate listener registration when script is re-injected
+const LISTENER_KEY = "__2vault_reddit_listener";
+const _g = globalThis as unknown as Record<string, boolean>;
+
+if (!_g[LISTENER_KEY]) {
+  _g[LISTENER_KEY] = true;
+
+  chrome.runtime.onMessage.addListener(
+    (
+      message: ExtractContentMessage,
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response: ExtractionResultMessage) => void
+    ) => {
+      if (message.type === "EXTRACT_CONTENT") {
+        waitForPostElement().then(() => {
+          const result = extractFromDom();
+          sendResponse({ type: "EXTRACTION_RESULT", data: result });
+        });
+        return true; // Keep message channel open for async response
+      }
+      return false;
     }
-    return false;
-  }
-);
+  );
+}
 
 // Export for testing
 export {

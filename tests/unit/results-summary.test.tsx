@@ -379,4 +379,76 @@ describe("ResultsSummary", () => {
 
     expect(screen.getByText("unknown")).toBeInTheDocument();
   });
+
+  // -- URL click-to-copy tests --
+
+  it("copies URL to clipboard when clicking URL cell", () => {
+    const mockWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: mockWriteText },
+    });
+
+    const results: ProcessingResult[] = [
+      {
+        url: "https://example.com/copy-test",
+        status: "success",
+        note: makeNote(),
+        folder: "Articles",
+      },
+    ];
+
+    render(<ResultsSummary {...defaultProps} results={results} />);
+
+    // Find URL cell and click it
+    const urlCell = screen.getByText(/example.com\/copy-test/);
+    fireEvent.click(urlCell);
+
+    expect(mockWriteText).toHaveBeenCalledWith(
+      "https://example.com/copy-test"
+    );
+  });
+
+  it("shows 'Copied!' confirmation after clicking URL", async () => {
+    const mockWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: mockWriteText },
+    });
+
+    const results: ProcessingResult[] = [
+      {
+        url: "https://example.com/test",
+        status: "success",
+        note: makeNote(),
+        folder: "Articles",
+      },
+    ];
+
+    render(<ResultsSummary {...defaultProps} results={results} />);
+
+    // Click URL cell
+    const urlCell = screen.getByText(/example.com\/test/);
+    fireEvent.click(urlCell);
+
+    // Should show "Copied!" confirmation
+    expect(screen.getByText("Copied!")).toBeInTheDocument();
+  });
+
+  it("shows URL title attribute on hover", () => {
+    const results: ProcessingResult[] = [
+      {
+        url: "https://example.com/very/long/path/to/article",
+        status: "success",
+        note: makeNote(),
+        folder: "Articles",
+      },
+    ];
+
+    render(<ResultsSummary {...defaultProps} results={results} />);
+
+    const urlCell = document.querySelector(".url-cell")!;
+    expect(urlCell).toHaveAttribute(
+      "title",
+      "https://example.com/very/long/path/to/article"
+    );
+  });
 });

@@ -4,6 +4,8 @@ import {
   IoCloseCircle,
   IoEllipsisHorizontal,
   IoHourglass,
+  IoStopCircleOutline,
+  IoTimerOutline,
   IoWarning,
 } from "react-icons/io5";
 import type { UrlStatus, ProcessingState } from "@/background/messages.ts";
@@ -17,8 +19,12 @@ export function StatusIcon({ status }: { status: UrlStatus }) {
       return <IoWarning className="status-icon status-icon-review" />;
     case "failed":
       return <IoCloseCircle className="status-icon status-icon-failed" />;
+    case "timeout":
+      return <IoTimerOutline className="status-icon status-icon-timeout" />;
     case "skipped":
       return <IoBanOutline className="status-icon status-icon-skipped" />;
+    case "cancelled":
+      return <IoStopCircleOutline className="status-icon status-icon-cancelled" />;
     case "queued":
       return <IoHourglass className="status-icon status-icon-queued" />;
     default:
@@ -37,12 +43,15 @@ const STATUS_LABELS: Record<UrlStatus, string> = {
   queued: "Queued",
   checking: "Checking",
   extracting: "Reading",
+  retrying: "Retrying",
   processing: "Summarizing",
   creating: "Saving",
   done: "Done",
   review: "Needs Review",
   failed: "Failed",
+  timeout: "Timed Out",
   skipped: "Skipped",
+  cancelled: "Cancelled",
 };
 
 export function statusDisplayLabel(status: UrlStatus): string {

@@ -42,10 +42,13 @@ async function sendMessageWithRetry(
       const response = await chrome.tabs.sendMessage(tabId, message);
       return response as ExtractionResultMessage;
     } catch (err) {
-      const isConnectionError =
+      const isRetryable =
         err instanceof Error &&
-        err.message.includes("Could not establish connection");
-      if (!isConnectionError || attempt === SEND_RETRY_COUNT) throw err;
+        (err.message.includes("Could not establish connection") ||
+         err.message.includes("Receiving end does not exist") ||
+         err.message.includes("message port closed") ||
+         err.message.includes("Extension context invalidated"));
+      if (!isRetryable || attempt === SEND_RETRY_COUNT) throw err;
       await new Promise((resolve) =>
         setTimeout(resolve, SEND_RETRY_DELAY_MS * (attempt + 1))
       );
@@ -81,73 +84,259 @@ async function openPopupWindow(): Promise<void> {
 
 // -- Tab-based DOM extraction -------------------------------------------------
 
-const DOM_EXTRACT_TIMEOUT_MS = 15_000;
-const MAX_CONCURRENT_TABS = 5;
+const DOM_EXTRACT_TIMEOUT_MS = 30_000; // Increased to match content script 30s polling timeout
+/**
+ * Delays between extraction attempts on the same tab.
+ * The tab stays open; each delay gives the page more time to finish loading.
+ */
+const DOM_RETRY_DELAYS_MS = [2_000, 5_000, 10_000]; // Reduced from 7 retries to 3 (4 total attempts)
+const MAX_DOM_ATTEMPTS = DOM_RETRY_DELAYS_MS.length + 1; // 1 immediate + 3 retries = 4 attempts
+const MAX_PRELOADED_TABS = 5;
 
-let activeTabExtractions = 0;
+// -- Tab preloader ------------------------------------------------------------
+// Pre-opens background tabs so pages start loading while other URLs are being
+// processed by the LLM. When a tab is released, the next pending URL's tab
+// opens immediately.
 
-async function waitForTabSlot(): Promise<void> {
-  while (activeTabExtractions >= MAX_CONCURRENT_TABS) {
-    await new Promise((resolve) => setTimeout(resolve, 200));
+/** Map of URL -> tabId for pre-loaded tabs */
+const preloadedTabs = new Map<string, number>();
+/** Number of tab creations in flight (not yet resolved) */
+let pendingTabCreations = 0;
+/** Tab IDs currently owned by active extractViaDom calls */
+const activeExtractionTabs = new Set<number>();
+/** URLs waiting to be pre-loaded */
+let preloadQueue: string[] = [];
+/** Abort flag to prevent tabs from being created after cancellation */
+let abortPreload = false;
+
+/** Pre-load tabs for a batch of social media URLs */
+export function preloadTabs(urls: string[]): void {
+  // Reset abort flag when starting a new preload batch
+  abortPreload = false;
+
+  // Only pre-load social media URLs (others use fetch, not tabs)
+  preloadQueue = urls.filter(isSocialMediaUrl);
+  fillPreloadSlots();
+}
+
+/** Open tabs up to the limit from the pending queue */
+function fillPreloadSlots(): void {
+  while (preloadedTabs.size + pendingTabCreations < MAX_PRELOADED_TABS && preloadQueue.length > 0) {
+    // Check abort flag before creating new tabs
+    if (abortPreload) return;
+
+    const url = preloadQueue.shift()!;
+    if (preloadedTabs.has(url)) continue;
+    pendingTabCreations++;
+    chrome.tabs.create({ url, active: false }).then((tab) => {
+      pendingTabCreations--;
+
+      // Cancel late-arriving tabs if abort was requested
+      if (abortPreload) {
+        if (tab.id !== undefined) {
+          chrome.tabs.remove(tab.id).catch(() => {});
+        }
+        return;
+      }
+
+      if (tab.id !== undefined) {
+        preloadedTabs.set(url, tab.id);
+      }
+    }).catch(() => {
+      pendingTabCreations--;
+    });
   }
 }
 
-export async function extractViaDom(url: string): Promise<ExtractedContent> {
-  await waitForTabSlot();
-  activeTabExtractions++;
+/** Claim a pre-loaded tab for extraction (removes from pool).
+ *  Waits briefly for pending tab creations if the URL isn't ready yet. */
+async function claimPreloadedTab(url: string): Promise<number | undefined> {
+  // If tab is already available, return immediately
+  let tabId = preloadedTabs.get(url);
+  if (tabId !== undefined) {
+    preloadedTabs.delete(url);
+    return tabId;
+  }
+  // If there are pending creations, wait a moment for them to resolve
+  if (pendingTabCreations > 0) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    tabId = preloadedTabs.get(url);
+    if (tabId !== undefined) {
+      preloadedTabs.delete(url);
+      return tabId;
+    }
+  }
+  return undefined;
+}
 
+/** Release a tab and open the next pending URL */
+function releaseTab(tabId: number): void {
+  chrome.tabs.remove(tabId).catch(() => {
+    // Tab may already be closed
+  });
+  fillPreloadSlots();
+}
+
+/** Clean up all pre-loaded tabs and active extraction tabs (e.g. on cancel) */
+export function clearAllProcessingTabs(): void {
+  // Set abort flag to prevent pending tab creations from completing
+  abortPreload = true;
+
+  for (const tabId of preloadedTabs.values()) {
+    chrome.tabs.remove(tabId).catch(() => {});
+  }
+  preloadedTabs.clear();
+  preloadQueue = [];
+  pendingTabCreations = 0;
+  for (const tabId of activeExtractionTabs) {
+    chrome.tabs.remove(tabId).catch(() => {});
+  }
+  activeExtractionTabs.clear();
+}
+
+// -- Tab-based DOM extraction with retry --------------------------------------
+
+/**
+ * Try to extract content from a tab's content script.
+ * Returns the extraction result, or null if the message fails (content script not ready).
+ * On failure, re-injects the content script and retries once (Bug #2 fix:
+ * background tabs may have stale/unresponsive content scripts).
+ */
+async function tryExtractFromTab(tabId: number, url: string): Promise<ExtractedContent | null> {
+  try {
+    const response = await Promise.race([
+      sendMessageWithRetry(tabId, { type: "EXTRACT_CONTENT" }),
+      rejectAfterTimeout(DOM_EXTRACT_TIMEOUT_MS),
+    ]);
+    return response.data;
+  } catch {
+    // Content script may be dead or never loaded in background tab.
+    // Re-inject and retry once.
+    try {
+      const scriptFile = getContentScriptForUrl(url);
+      if (!scriptFile) return null;
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: [scriptFile],
+      });
+      // Brief wait for content script to initialize
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const response = await Promise.race([
+        chrome.tabs.sendMessage(tabId, { type: "EXTRACT_CONTENT" }) as Promise<ExtractionResultMessage>,
+        rejectAfterTimeout(DOM_EXTRACT_TIMEOUT_MS),
+      ]);
+      return response.data;
+    } catch {
+      return null;
+    }
+  }
+}
+
+export async function extractViaDom(
+  url: string,
+  onRetry?: (attempt: number, totalAttempts: number) => void,
+): Promise<ExtractedContent> {
   let tabId: number | undefined;
+  let tabOwned = false;
 
   try {
-    const tab = await chrome.tabs.create({ url, active: false });
-    tabId = tab.id;
+    // Use pre-loaded tab if available, otherwise create one
+    tabId = await claimPreloadedTab(url);
+    if (tabId !== undefined) {
+      tabOwned = true;
+    } else {
+      const tab = await chrome.tabs.create({ url, active: false });
+      tabId = tab.id;
+      tabOwned = true;
+    }
 
     if (tabId === undefined) {
       return createFailedExtraction(url, "Failed to create tab");
     }
 
-    // Wait for tab to finish loading
-    await waitForTabLoad(tabId);
+    // Track this tab so cancel can close it
+    activeExtractionTabs.add(tabId);
 
-    // Request extraction from content script (retry for document_idle timing)
-    const response = await Promise.race([
-      sendMessageWithRetry(tabId, { type: "EXTRACT_CONTENT" }),
-      rejectAfterTimeout(DOM_EXTRACT_TIMEOUT_MS),
-    ]);
+    // Wait for initial tab load (may already be loaded if pre-loaded)
+    try {
+      await waitForTabLoad(tabId, DOM_EXTRACT_TIMEOUT_MS);
+    } catch {
+      // Tab load timed out - still try extraction, page may be partially loaded
+    }
 
-    return response.data;
+    for (let attempt = 0; attempt < MAX_DOM_ATTEMPTS; attempt++) {
+      // On retries, sleep to give the page more time to load content
+      if (attempt > 0) {
+        const delay = DOM_RETRY_DELAYS_MS[attempt - 1]!;
+        console.warn(`[2Vault] Attempt ${attempt + 1}/${MAX_DOM_ATTEMPTS} for ${url}, waiting ${delay / 1000}s for content`);
+        onRetry?.(attempt + 1, MAX_DOM_ATTEMPTS);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+
+      const result = await tryExtractFromTab(tabId, url);
+
+      // Content script responded with successful extraction
+      if (result?.status === "success") {
+        return result;
+      }
+
+      // Last attempt - return whatever we got
+      if (attempt === MAX_DOM_ATTEMPTS - 1) {
+        const lastError = result?.error ?? "extraction failed";
+        return {
+          ...(result ?? createFailedExtraction(url, lastError)),
+          error: `Timed out after ${MAX_DOM_ATTEMPTS} attempts: ${lastError}`,
+        };
+      }
+
+      if (result) {
+        console.warn(`[2Vault] Attempt ${attempt + 1} failed for ${url}: ${result.error}`);
+      }
+    }
+
+    return createFailedExtraction(url, `Timed out after ${MAX_DOM_ATTEMPTS} attempts`);
   } catch (err) {
     const message = err instanceof Error ? err.message : "DOM extraction failed";
     return createFailedExtraction(url, message);
   } finally {
-    activeTabExtractions--;
     if (tabId !== undefined) {
-      chrome.tabs.remove(tabId).catch(() => {
-        // Tab may already be closed
-      });
+      activeExtractionTabs.delete(tabId);
+    }
+    if (tabOwned && tabId !== undefined) {
+      releaseTab(tabId);
     }
   }
 }
 
-function waitForTabLoad(tabId: number): Promise<void> {
+function waitForTabLoad(tabId: number, timeoutMs: number = DOM_EXTRACT_TIMEOUT_MS): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      chrome.tabs.onUpdated.removeListener(listener);
-      reject(new Error("Tab load timed out"));
-    }, DOM_EXTRACT_TIMEOUT_MS);
-
-    const listener = (
-      updatedTabId: number,
-      changeInfo: chrome.tabs.OnUpdatedInfo
-    ) => {
-      if (updatedTabId === tabId && changeInfo.status === "complete") {
-        clearTimeout(timeout);
-        chrome.tabs.onUpdated.removeListener(listener);
+    // Bug #1 fix: Check if tab is already loaded (e.g. pre-loaded tab)
+    chrome.tabs.get(tabId).then((tab) => {
+      if (tab.status === "complete") {
         resolve();
+        return;
       }
-    };
 
-    chrome.tabs.onUpdated.addListener(listener);
+      const timeout = setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(listener);
+        reject(new Error("Tab load timed out"));
+      }, timeoutMs);
+
+      const listener = (
+        updatedTabId: number,
+        changeInfo: chrome.tabs.OnUpdatedInfo
+      ) => {
+        if (updatedTabId === tabId && changeInfo.status === "complete") {
+          clearTimeout(timeout);
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      };
+
+      chrome.tabs.onUpdated.addListener(listener);
+    }).catch(() => {
+      reject(new Error("Tab not found"));
+    });
   });
 }
 
@@ -218,8 +407,16 @@ function createInitialState(urls: string[]): ProcessingState {
 
 async function runBatchProcessing(urls: string[]): Promise<void> {
   cancelRequested = false;
+  abortPreload = false; // Reset abort flag for new batch
 
-  const state = createInitialState(urls);
+  // Normalize URLs before processing to prevent duplicate tabs (old.reddit.com vs reddit.com)
+  const { normalizeUrl } = await import("@/core/orchestrator");
+  const normalizedUrls = urls.map(normalizeUrl);
+
+  // Pre-open tabs for social media URLs so pages start loading immediately
+  preloadTabs(normalizedUrls);
+
+  const state = createInitialState(normalizedUrls);
   await setProcessingState(state);
 
   // Live urlStatuses map - mutated by onProgress, read by final state
@@ -227,26 +424,75 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
   const results: ProcessingResult[] = [];
   let batchError: string | undefined;
 
+  // BUG #1 FIX: Prevent race conditions in state updates with atomic read-modify-write
+  let stateUpdateInProgress = false;
+  const pendingUpdates: Array<{ url: string; status: string }> = [];
+
+  const processStateUpdates = async () => {
+    if (stateUpdateInProgress || pendingUpdates.length === 0) return;
+    stateUpdateInProgress = true;
+
+    try {
+      // Batch all pending updates
+      while (pendingUpdates.length > 0) {
+        const update = pendingUpdates.shift();
+        if (!update) break;
+        urlStatuses[update.url] = update.status as UrlStatus;
+      }
+
+      // Single atomic state write
+      await setProcessingState({
+        ...state,
+        urlStatuses: { ...urlStatuses },
+        results: [...results],
+      });
+    } finally {
+      stateUpdateInProgress = false;
+      // Process any updates that arrived during this write
+      if (pendingUpdates.length > 0) {
+        await processStateUpdates();
+      }
+    }
+  };
+
   try {
     const config = await getConfig();
     const provider = createDefaultProvider(config);
 
     const onProgress = async (url: string, status: string) => {
       if (cancelRequested) return;
-      urlStatuses[url] = status as UrlStatus;
-      await setProcessingState({
-        ...state,
-        urlStatuses: { ...urlStatuses },
-        results: [...results],
-      });
+      pendingUpdates.push({ url, status });
+      await processStateUpdates();
+    };
+
+    // BUG #2 FIX: Ensure retry status always transitions to final state
+    const extractWithRetryStatus = async (url: string): Promise<ExtractedContent> => {
+      let result: ExtractedContent;
+
+      if (isSocialMediaUrl(url)) {
+        result = await extractViaDom(url, () => {
+          onProgress(url, "retrying");
+        });
+      } else {
+        result = await fetchAndExtract(url);
+      }
+
+      // Ensure final state is set after extraction completes
+      // This prevents URLs from getting stuck at "retrying"
+      if (result.status === "failed") {
+        const isTimeout = result.error?.startsWith("Timed out after") ?? false;
+        await onProgress(url, isTimeout ? "timeout" : "failed");
+      }
+
+      return result;
     };
 
     const allResults = await processUrls(
-      urls,
+      normalizedUrls,
       config,
       provider,
       onProgress,
-      smartExtract,
+      extractWithRetryStatus,
       () => cancelRequested
     );
     results.push(...allResults);
@@ -270,6 +516,8 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
     if (result.status === "success") urlStatuses[result.url] = "done";
     else if (result.status === "review") urlStatuses[result.url] = "review";
     else if (result.status === "skipped") urlStatuses[result.url] = "skipped";
+    else if (result.status === "timeout") urlStatuses[result.url] = "timeout";
+    else if (result.status === "cancelled") urlStatuses[result.url] = "cancelled";
     else urlStatuses[result.url] = "failed";
   }
 
@@ -312,7 +560,7 @@ async function handleSingleUrlCapture(
   const results = await processUrls([url], config, provider, undefined, extractFn);
   const result = results[0];
 
-  if (result?.status === "success" || result?.status === "review") {
+  if (result && (result.status === "success" || result.status === "review")) {
     chrome.notifications.create({
       type: "basic",
       iconUrl: chrome.runtime.getURL("icons/icon-128.png"),
@@ -461,9 +709,18 @@ chrome.runtime.onMessage.addListener(
 
     if (message.type === "CANCEL_PROCESSING") {
       cancelRequested = true;
+      clearAllProcessingTabs();
       getProcessingState().then(async (state) => {
         if (state) {
-          await setProcessingState({ ...state, cancelled: true, active: false });
+          // Mark all non-terminal URLs as cancelled
+          const terminalStatuses = new Set(["done", "failed", "skipped", "review", "timeout", "cancelled"]);
+          const updatedStatuses = { ...state.urlStatuses };
+          for (const url of state.urls) {
+            if (!terminalStatuses.has(updatedStatuses[url] ?? "queued")) {
+              updatedStatuses[url] = "cancelled";
+            }
+          }
+          await setProcessingState({ ...state, urlStatuses: updatedStatuses, cancelled: true, active: false });
         }
         sendResponse({ type: "PROCESSING_CANCELLED" });
       });

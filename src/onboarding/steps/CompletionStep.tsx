@@ -1,30 +1,11 @@
-import { useState, useCallback } from "react";
 import { IoCheckmarkCircle } from "react-icons/io5";
 import type { OnboardingData } from "../hooks/useOnboardingState";
 
 interface Props {
   data: OnboardingData;
-  onComplete: () => Promise<void>;
 }
 
-export function CompletionStep({ data, onComplete }: Props) {
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string>();
-
-  const handleOpen2Vault = useCallback(async () => {
-    setSaving(true);
-    setError(undefined);
-    try {
-      await onComplete();
-      // Try to open popup, then close this tab
-      chrome.runtime.sendMessage({ type: "OPEN_POPUP" });
-      window.close();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save settings");
-      setSaving(false);
-    }
-  }, [onComplete]);
-
+export function CompletionStep({ data }: Props) {
   return (
     <div className="step-content">
       <h2>You're all set!</h2>
@@ -54,20 +35,25 @@ export function CompletionStep({ data, onComplete }: Props) {
         </p>
       </div>
 
-      {error && (
-        <div className="error-guidance">
-          <p>{error}</p>
-        </div>
-      )}
-
-      <div className="form-actions completion-actions">
-        <button
-          className="btn btn-primary btn-lg"
-          onClick={handleOpen2Vault}
-          disabled={saving}
-        >
-          {saving ? "Saving..." : "Open 2Vault"}
-        </button>
+      <div className="status-guide">
+        <h3>Understanding Status Types</h3>
+        <ul className="status-list">
+          <li>
+            <strong>Success:</strong> Note created successfully in your vault
+          </li>
+          <li>
+            <strong>Review:</strong> Note saved, but content extraction was incomplete (e.g., login required, bot protection). You can review and verify in your vault.
+          </li>
+          <li>
+            <strong>Skipped:</strong> URL already exists in your vault or was filtered out
+          </li>
+          <li>
+            <strong>Timeout:</strong> Page took too long to load (30+ seconds)
+          </li>
+          <li>
+            <strong>Failed:</strong> Processing failed due to network errors, API issues, or page restrictions
+          </li>
+        </ul>
       </div>
     </div>
   );

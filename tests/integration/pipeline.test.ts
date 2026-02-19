@@ -24,7 +24,10 @@ const TEST_CONFIG: Config = {
   llmProvider: "openrouter",
   vaultUrl: "https://localhost:27124",
   vaultApiKey: "test-vault-key",
-  defaultFolder: "Inbox",
+  vaultName: "TestVault",
+  vaultOrganization: "para",
+  tagGroups: [],
+  summaryDetailLevel: "standard",
 };
 
 const MOCK_VAULT_CONTEXT: VaultContext = {

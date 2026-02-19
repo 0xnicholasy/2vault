@@ -200,8 +200,10 @@ const TEST_CONFIG = {
   llmProvider: "openrouter" as const,
   vaultUrl: "https://localhost:27124",
   vaultApiKey: "vault-key",
-  defaultFolder: "Inbox",
   vaultName: "TestVault",
+  vaultOrganization: "para" as const,
+  tagGroups: [],
+  summaryDetailLevel: "standard" as const,
 };
 
 // ---------------------------------------------------------------------------

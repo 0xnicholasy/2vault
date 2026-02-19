@@ -220,7 +220,10 @@ const TEST_CONFIG = {
   llmProvider: "openrouter" as const,
   vaultUrl: "https://localhost:27124",
   vaultApiKey: "vault-key",
-  defaultFolder: "Inbox",
+  vaultName: "TestVault",
+  vaultOrganization: "para" as const,
+  tagGroups: [],
+  summaryDetailLevel: "standard" as const,
 };
 
 // Import once to register listeners (avoids re-importing the entire module
@@ -860,5 +863,619 @@ describe("Service worker - context menu", () => {
         expect.objectContaining({ type: "popup" })
       );
     });
+  });
+});
+
+// -- extractViaDom retry logic ------------------------------------------------
+
+describe("Service worker - extractViaDom retry logic", () => {
+  /**
+   * Helper: trigger START_PROCESSING and capture the extractFn (5th arg)
+   * that runBatchProcessing passes to processUrls.
+   */
+  async function captureExtractFn(
+    urls: string[] = ["https://x.com/user/status/123"]
+  ): Promise<(url: string) => Promise<ExtractedContent>> {
+    // Make processUrls hang until we resolve it, so we can grab the extractFn
+    let resolveProcessUrls!: (value: ProcessingResult[]) => void;
+    const processUrlsPromise = new Promise<ProcessingResult[]>((resolve) => {
+      resolveProcessUrls = resolve;
+    });
+    mockProcessUrls.mockReturnValue(processUrlsPromise);
+
+    const sendResponse = vi.fn();
+    messageListener!(
+      { type: "START_PROCESSING", urls },
+      {} as chrome.runtime.MessageSender,
+      sendResponse
+    );
+
+    // Wait until processUrls is called
+    let extractFn!: (url: string) => Promise<ExtractedContent>;
+    await vi.waitFor(() => {
+      expect(mockProcessUrls).toHaveBeenCalled();
+      const call = mockProcessUrls.mock.calls[0];
+      extractFn = call[4] as (url: string) => Promise<ExtractedContent>;
+      expect(extractFn).toBeTypeOf("function");
+    });
+
+    // Resolve processUrls so the batch completes in the background
+    resolveProcessUrls([{ url: urls[0]!, status: "success", folder: "Inbox" }]);
+
+    return extractFn;
+  }
+
+  // We need chrome.tabs.get for waitForTabLoad. Add it if not already present.
+  beforeEach(() => {
+    if (!chrome.tabs.get) {
+      (chrome.tabs as Record<string, ReturnType<typeof vi.fn>>).get = vi.fn();
+    }
+    // Default: tab not yet loaded (will wait for onUpdated)
+    vi.mocked(chrome.tabs.get).mockResolvedValue({
+      status: "loading",
+    } as chrome.tabs.Tab);
+
+    // Restore default sendMessage behavior (successful extraction)
+    vi.mocked(chrome.tabs.sendMessage).mockReset();
+    vi.mocked(chrome.tabs.sendMessage).mockResolvedValue({
+      type: "EXTRACTION_RESULT",
+      data: {
+        url: "https://x.com/user/status/123",
+        title: "Post by Test User",
+        content: "Tweet content",
+        author: "Test User (@testuser)",
+        datePublished: "2026-02-15T10:00:00.000Z",
+        wordCount: 2,
+        type: "social-media",
+        platform: "x",
+        status: "success",
+      },
+    });
+
+    // Restore default tabs.create (returns tab with id 99)
+    vi.mocked(chrome.tabs.create).mockReset();
+    vi.mocked(chrome.tabs.create).mockResolvedValue({ id: 99 } as chrome.tabs.Tab);
+
+    vi.mocked(chrome.tabs.remove).mockReset();
+    vi.mocked(chrome.tabs.remove).mockResolvedValue(undefined);
+
+    vi.mocked(chrome.scripting.executeScript).mockReset();
+    vi.mocked(chrome.scripting.executeScript).mockResolvedValue([{ result: undefined }] as chrome.scripting.InjectionResult[]);
+
+    // Reset onUpdated listeners
+    tabUpdateListeners = [];
+    vi.mocked(chrome.tabs.onUpdated.addListener).mockImplementation(
+      (fn: (tabId: number, changeInfo: chrome.tabs.OnUpdatedInfo) => void) => {
+        tabUpdateListeners.push(fn);
+        // Auto-fire "complete" for the created tab after a tick
+        setTimeout(() => fn(99, { status: "complete" } as chrome.tabs.OnUpdatedInfo), 5);
+      }
+    );
+    vi.mocked(chrome.tabs.onUpdated.removeListener).mockImplementation(
+      (fn: (tabId: number, changeInfo: chrome.tabs.OnUpdatedInfo) => void) => {
+        tabUpdateListeners = tabUpdateListeners.filter((l) => l !== fn);
+      }
+    );
+  });
+
+  it("extractViaDom succeeds on first attempt", async () => {
+    vi.mocked(chrome.tabs.sendMessage).mockResolvedValue({
+      type: "EXTRACTION_RESULT",
+      data: {
+        url: "https://x.com/user/status/123",
+        title: "Post by Test User",
+        content: "Tweet content",
+        author: "Test User (@testuser)",
+        datePublished: "2026-02-15T10:00:00.000Z",
+        wordCount: 2,
+        type: "social-media",
+        platform: "x",
+        status: "success",
+      },
+    });
+
+    const extractFn = await captureExtractFn();
+    const result = await extractFn("https://x.com/user/status/123");
+
+    expect(result.status).toBe("success");
+    expect(result.title).toBe("Post by Test User");
+    // Tab should be cleaned up
+    expect(chrome.tabs.remove).toHaveBeenCalled();
+  });
+
+  it("extractViaDom retries on failed extraction", async () => {
+    vi.useFakeTimers();
+
+    let callCount = 0;
+    vi.mocked(chrome.tabs.sendMessage).mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          type: "EXTRACTION_RESULT",
+          data: {
+            url: "https://x.com/user/status/123",
+            title: "",
+            content: "",
+            author: null,
+            datePublished: null,
+            wordCount: 0,
+            type: "social-media",
+            platform: "x",
+            status: "failed",
+            error: "fallback",
+          },
+        };
+      }
+      return {
+        type: "EXTRACTION_RESULT",
+        data: {
+          url: "https://x.com/user/status/123",
+          title: "Post by Test User",
+          content: "Tweet content",
+          author: "Test User (@testuser)",
+          datePublished: "2026-02-15T10:00:00.000Z",
+          wordCount: 2,
+          type: "social-media",
+          platform: "x",
+          status: "success",
+        },
+      };
+    });
+
+    // Make tabs.get return complete so waitForTabLoad resolves fast
+    vi.mocked(chrome.tabs.get).mockResolvedValue({
+      status: "complete",
+    } as chrome.tabs.Tab);
+
+    const extractFn = await captureExtractFn();
+    const resultPromise = extractFn("https://x.com/user/status/123");
+
+    // Advance past the first retry delay (1000ms)
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    const result = await resultPromise;
+
+    expect(result.status).toBe("success");
+    expect(callCount).toBeGreaterThanOrEqual(2);
+
+    vi.useRealTimers();
+  });
+
+  it("extractViaDom returns timeout after MAX_DOM_ATTEMPTS", async () => {
+    vi.useFakeTimers();
+
+    vi.mocked(chrome.tabs.sendMessage).mockResolvedValue({
+      type: "EXTRACTION_RESULT",
+      data: {
+        url: "https://x.com/user/status/123",
+        title: "",
+        content: "",
+        author: null,
+        datePublished: null,
+        wordCount: 0,
+        type: "social-media",
+        platform: "x",
+        status: "failed",
+        error: "no content found",
+      },
+    });
+
+    // Make tabs.get return complete so waitForTabLoad resolves fast
+    vi.mocked(chrome.tabs.get).mockResolvedValue({
+      status: "complete",
+    } as chrome.tabs.Tab);
+
+    const extractFn = await captureExtractFn();
+    const resultPromise = extractFn("https://x.com/user/status/123");
+
+    // Advance through all retry delays: 1s + 5s + 5s + 10s + 10s + 15s + 15s + 20s = 81s
+    // Use a generous advance to cover all delays plus internal timeouts
+    for (let i = 0; i < 10; i++) {
+      await vi.advanceTimersByTimeAsync(25_000);
+    }
+
+    const result = await resultPromise;
+
+    expect(result.error).toContain("Timed out after");
+    expect(result.status).toBe("failed");
+
+    vi.useRealTimers();
+  });
+
+  it("waitForTabLoad resolves immediately for already-loaded tabs", async () => {
+    // Mock tabs.get to return a tab that is already complete
+    vi.mocked(chrome.tabs.get).mockResolvedValue({
+      status: "complete",
+    } as chrome.tabs.Tab);
+
+    // Clear the addListener mock to track fresh calls
+    vi.mocked(chrome.tabs.onUpdated.addListener).mockClear();
+
+    // We cannot call waitForTabLoad directly, but extractViaDom calls it.
+    // If tabs.get returns complete, onUpdated.addListener should NOT be called.
+    const extractFn = await captureExtractFn();
+    await extractFn("https://x.com/user/status/123");
+
+    // onUpdated.addListener should NOT have been called since tab was already loaded
+    expect(chrome.tabs.onUpdated.addListener).not.toHaveBeenCalled();
+  });
+
+  it("tryExtractFromTab re-injects content script on failure", async () => {
+    // sendMessageWithRetry does SEND_RETRY_COUNT+1 = 4 attempts.
+    // All 4 must throw so tryExtractFromTab catches and re-injects.
+    // Then the direct sendMessage call (5th) after re-injection succeeds.
+    let callCount = 0;
+    vi.mocked(chrome.tabs.sendMessage).mockImplementation(async () => {
+      callCount++;
+      if (callCount <= 4) {
+        throw new Error("Could not establish connection");
+      }
+      // After re-injection, succeed
+      return {
+        type: "EXTRACTION_RESULT",
+        data: {
+          url: "https://x.com/user/status/123",
+          title: "Post by Test User",
+          content: "Tweet content",
+          author: "Test User (@testuser)",
+          datePublished: "2026-02-15T10:00:00.000Z",
+          wordCount: 2,
+          type: "social-media",
+          platform: "x",
+          status: "success",
+        },
+      };
+    });
+
+    vi.useFakeTimers();
+
+    // Make tabs.get return complete so waitForTabLoad resolves fast
+    vi.mocked(chrome.tabs.get).mockResolvedValue({
+      status: "complete",
+    } as chrome.tabs.Tab);
+
+    const extractFn = await captureExtractFn();
+    const resultPromise = extractFn("https://x.com/user/status/123");
+
+    // Advance timers to cover sendMessageWithRetry delays + post-injection wait
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(5_000);
+    }
+
+    const result = await resultPromise;
+
+    // scripting.executeScript should have been called to re-inject
+    expect(chrome.scripting.executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: { tabId: 99 },
+      })
+    );
+
+    vi.useRealTimers();
+  });
+
+  it("sendMessageWithRetry retries on 'Receiving end does not exist'", async () => {
+    let callCount = 0;
+    vi.mocked(chrome.tabs.sendMessage).mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        throw new Error("Receiving end does not exist");
+      }
+      return {
+        type: "EXTRACTION_RESULT",
+        data: {
+          url: "https://x.com/user/status/123",
+          title: "Post by Test User",
+          content: "Tweet content",
+          author: "Test User (@testuser)",
+          datePublished: "2026-02-15T10:00:00.000Z",
+          wordCount: 2,
+          type: "social-media",
+          platform: "x",
+          status: "success",
+        },
+      };
+    });
+
+    vi.useFakeTimers();
+
+    // Make tabs.get return complete
+    vi.mocked(chrome.tabs.get).mockResolvedValue({
+      status: "complete",
+    } as chrome.tabs.Tab);
+
+    const extractFn = await captureExtractFn();
+    const resultPromise = extractFn("https://x.com/user/status/123");
+
+    // Advance past sendMessageWithRetry delay (500ms * (attempt+1))
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(2_000);
+    }
+
+    const result = await resultPromise;
+
+    expect(result.status).toBe("success");
+    // sendMessage should have been called at least twice (1 failure + 1 success)
+    expect(callCount).toBeGreaterThanOrEqual(2);
+
+    vi.useRealTimers();
+  });
+
+  it("preloadTabs only opens tabs for social media URLs", async () => {
+    vi.mocked(chrome.tabs.create).mockClear();
+
+    const urls = [
+      "https://x.com/user/status/123",
+      "https://example.com/article",
+      "https://www.linkedin.com/posts/test",
+      "https://news.ycombinator.com/item?id=1",
+      "https://www.reddit.com/r/webdev/comments/abc/test",
+    ];
+
+    // Trigger batch processing which calls preloadTabs internally
+    const sendResponse = vi.fn();
+    messageListener!(
+      { type: "START_PROCESSING", urls },
+      {} as chrome.runtime.MessageSender,
+      sendResponse
+    );
+
+    // Wait for processUrls to be called (which means preloadTabs already ran)
+    await vi.waitFor(() => {
+      expect(mockProcessUrls).toHaveBeenCalled();
+    });
+
+    // tabs.create should only be called for social media URLs (x.com, linkedin, reddit)
+    const createCalls = vi.mocked(chrome.tabs.create).mock.calls;
+    const createdUrls = createCalls.map(
+      (call) => (call[0] as { url: string }).url
+    );
+
+    // Should contain social media URLs
+    expect(createdUrls).toContain("https://x.com/user/status/123");
+    expect(createdUrls).toContain("https://www.linkedin.com/posts/test");
+    expect(createdUrls).toContain("https://www.reddit.com/r/webdev/comments/abc/test");
+
+    // Should NOT contain non-social-media URLs
+    expect(createdUrls).not.toContain("https://example.com/article");
+    expect(createdUrls).not.toContain("https://news.ycombinator.com/item?id=1");
+  });
+
+  it("claimPreloadedTab returns preloaded tab ID", async () => {
+    // Pre-load a tab by starting batch processing
+    const socialUrl = "https://x.com/user/status/456";
+
+    // Make tabs.create resolve with a specific tab ID for our URL
+    vi.mocked(chrome.tabs.create).mockImplementation(async (opts) => {
+      const url = (opts as { url: string }).url;
+      if (url === socialUrl) {
+        return { id: 77 } as chrome.tabs.Tab;
+      }
+      return { id: 99 } as chrome.tabs.Tab;
+    });
+
+    // tabs.get returns complete for the preloaded tab
+    vi.mocked(chrome.tabs.get).mockResolvedValue({
+      status: "complete",
+    } as chrome.tabs.Tab);
+
+    // When processUrls is called, we capture extractFn and call it.
+    // The extractFn (extractWithRetryStatus) calls extractViaDom, which
+    // calls claimPreloadedTab internally.
+    let extractFn!: (url: string) => Promise<ExtractedContent>;
+    let resolveProcessUrls!: (value: ProcessingResult[]) => void;
+    mockProcessUrls.mockImplementation(
+      async (
+        _urls: string[],
+        _config: Record<string, string>,
+        _provider: Record<string, unknown>,
+        _onProgress: ((url: string, status: string) => void) | undefined,
+        extractWithRetryStatus: (url: string) => Promise<ExtractedContent>,
+      ) => {
+        extractFn = extractWithRetryStatus;
+        // Call extractFn which should use the preloaded tab
+        const result = await extractFn(socialUrl);
+        return [{ url: socialUrl, status: result.status as "success", folder: "Inbox" }];
+      }
+    );
+
+    const sendResponse = vi.fn();
+    messageListener!(
+      { type: "START_PROCESSING", urls: [socialUrl] },
+      {} as chrome.runtime.MessageSender,
+      sendResponse
+    );
+
+    await vi.waitFor(() => {
+      expect(mockProcessUrls).toHaveBeenCalled();
+    });
+
+    // Wait for the batch processing to complete
+    await vi.waitFor(() => {
+      // The preloaded tab (id 77) should have been used, not a fresh one
+      // tabs.create should have been called once for preloading
+      const createCalls = vi.mocked(chrome.tabs.create).mock.calls;
+      expect(createCalls.length).toBeGreaterThanOrEqual(1);
+      const preloadCall = createCalls.find(
+        (call) => (call[0] as { url: string }).url === socialUrl
+      );
+      expect(preloadCall).toBeDefined();
+    });
+
+    // The tab 77 (preloaded) should eventually be removed (cleanup)
+    await vi.waitFor(() => {
+      expect(chrome.tabs.remove).toHaveBeenCalledWith(77);
+    });
+  });
+});
+
+// Type import for captureExtractFn return type
+type ExtractedContent = import("@/core/types.ts").ExtractedContent;
+type ProcessingResult = import("@/core/types.ts").ProcessingResult;
+
+// -- Tab Preloader: additional coverage (HIGH) --------------------------------
+
+describe("Service worker - Tab Preloader (direct API)", () => {
+  let sw: {
+    preloadTabs: (urls: string[]) => void;
+    clearAllProcessingTabs: () => void;
+    extractViaDom: (
+      url: string,
+      onRetry?: (attempt: number, total: number) => void,
+    ) => Promise<ExtractedContent>;
+  };
+
+  beforeAll(async () => {
+    const mod = await import("@/background/service-worker");
+    sw = {
+      preloadTabs: mod.preloadTabs,
+      clearAllProcessingTabs: mod.clearAllProcessingTabs,
+      extractViaDom: mod.extractViaDom,
+    };
+  });
+
+  beforeEach(() => {
+    sw.clearAllProcessingTabs();
+    vi.mocked(chrome.tabs.create).mockClear();
+    vi.mocked(chrome.tabs.remove).mockClear();
+    vi.mocked(chrome.tabs.sendMessage).mockClear();
+
+    let nextTabId = 300;
+    vi.mocked(chrome.tabs.create).mockImplementation(() =>
+      Promise.resolve({ id: nextTabId++ } as chrome.tabs.Tab),
+    );
+
+    if (!chrome.tabs.get) {
+      (chrome.tabs as Record<string, ReturnType<typeof vi.fn>>).get = vi.fn();
+    }
+    vi.mocked(chrome.tabs.get).mockImplementation((tabId: number) =>
+      Promise.resolve({ id: tabId, status: "complete" } as chrome.tabs.Tab),
+    );
+
+    vi.mocked(chrome.tabs.sendMessage).mockResolvedValue({
+      type: "EXTRACTION_RESULT",
+      data: {
+        url: "https://x.com/user/status/1",
+        title: "Test Post",
+        content: "Content",
+        author: null,
+        datePublished: null,
+        wordCount: 1,
+        type: "social-media",
+        platform: "x",
+        status: "success",
+      },
+    });
+  });
+
+  it("preloadTabs does not exceed MAX_PRELOADED_TABS (5)", async () => {
+    const socialUrls = Array.from(
+      { length: 8 },
+      (_, i) => `https://x.com/user/status/${i + 1}`,
+    );
+
+    sw.preloadTabs(socialUrls);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(vi.mocked(chrome.tabs.create).mock.calls.length).toBeLessThanOrEqual(5);
+  });
+
+  it("claimPreloadedTab returns preloaded tab immediately when available", async () => {
+    const url = "https://x.com/user/status/42";
+
+    sw.preloadTabs([url]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    vi.mocked(chrome.tabs.create).mockClear();
+
+    await sw.extractViaDom(url);
+
+    expect(vi.mocked(chrome.tabs.create)).not.toHaveBeenCalled();
+  });
+
+  it("claimPreloadedTab returns undefined when no tab available", async () => {
+    const url = "https://x.com/user/status/99";
+
+    await sw.extractViaDom(url);
+
+    expect(vi.mocked(chrome.tabs.create)).toHaveBeenCalledWith(
+      expect.objectContaining({ url, active: false }),
+    );
+  });
+
+  it("releaseTab removes the tab and triggers fillPreloadSlots", async () => {
+    const urls = Array.from(
+      { length: 6 },
+      (_, i) => `https://x.com/user/status/${i + 1}`,
+    );
+
+    sw.preloadTabs(urls);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const createCountAfterPreload = vi.mocked(chrome.tabs.create).mock.calls.length;
+    expect(createCountAfterPreload).toBeLessThanOrEqual(5);
+
+    await sw.extractViaDom("https://x.com/user/status/1");
+
+    expect(vi.mocked(chrome.tabs.remove)).toHaveBeenCalled();
+
+    const createCountAfterRelease = vi.mocked(chrome.tabs.create).mock.calls.length;
+    expect(createCountAfterRelease).toBeGreaterThan(createCountAfterPreload);
+  });
+
+  it("clearAllProcessingTabs closes all preloaded tabs", async () => {
+    const urls = [
+      "https://x.com/user/status/1",
+      "https://x.com/user/status/2",
+      "https://x.com/user/status/3",
+    ];
+
+    sw.preloadTabs(urls);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    vi.mocked(chrome.tabs.remove).mockClear();
+
+    sw.clearAllProcessingTabs();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(vi.mocked(chrome.tabs.remove)).toHaveBeenCalledTimes(urls.length);
+  });
+
+  it("preloadedTabs skips duplicate URLs already in the map", async () => {
+    const url = "https://x.com/user/status/unique";
+
+    sw.preloadTabs([url]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(vi.mocked(chrome.tabs.create)).toHaveBeenCalledTimes(1);
+
+    sw.preloadTabs([url]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(vi.mocked(chrome.tabs.create)).toHaveBeenCalledTimes(1);
+  });
+
+  it("pendingTabCreations count decrements even on tab creation failure", async () => {
+    vi.mocked(chrome.tabs.create).mockRejectedValue(
+      new Error("Tab creation failed"),
+    );
+
+    const urls = Array.from(
+      { length: 5 },
+      (_, i) => `https://x.com/user/status/${i + 1}`,
+    );
+
+    sw.preloadTabs(urls);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    vi.mocked(chrome.tabs.create).mockClear();
+    let nextRecoveryId = 400;
+    vi.mocked(chrome.tabs.create).mockImplementation(() =>
+      Promise.resolve({ id: nextRecoveryId++ } as chrome.tabs.Tab),
+    );
+
+    sw.preloadTabs(urls);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(vi.mocked(chrome.tabs.create).mock.calls.length).toBeGreaterThan(0);
   });
 });

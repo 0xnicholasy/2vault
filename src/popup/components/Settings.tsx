@@ -5,7 +5,6 @@ import { testOpenRouterConnection } from "@/core/openrouter-provider";
 import { getConfig, setSyncStorage } from "@/utils/storage";
 import {
   DEFAULT_VAULT_URL,
-  DEFAULT_FOLDER,
   PARA_DESCRIPTIONS,
   VAULT_URL_PRESETS,
   SUMMARY_DETAIL_OPTIONS,
@@ -21,7 +20,6 @@ export function Settings() {
   const [apiKey, setApiKey] = useState("");
   const [vaultUrl, setVaultUrl] = useState(DEFAULT_VAULT_URL);
   const [vaultApiKey, setVaultApiKey] = useState("");
-  const [defaultFolder, setDefaultFolder] = useState(DEFAULT_FOLDER);
   const [vaultName, setVaultName] = useState("");
   const [vaultOrganization, setVaultOrganization] =
     useState<VaultOrganization>("para");
@@ -33,28 +31,23 @@ export function Settings() {
   const [showVaultApiKey, setShowVaultApiKey] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string>();
   const [vaultApiKeyError, setVaultApiKeyError] = useState<string>();
-  const [vaultUrlPreset, setVaultUrlPreset] = useState(DEFAULT_VAULT_URL);
 
   const [llmStatus, setLlmStatus] = useState<ConnectionStatus>("idle");
   const [vaultStatus, setVaultStatus] = useState<ConnectionStatus>("idle");
+  const [vaultErrorMsg, setVaultErrorMsg] = useState<string>();
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     getConfig().then((config) => {
       setApiKey(config.apiKey);
-      setVaultUrl(config.vaultUrl);
+      // Always use default HTTP URL
+      setVaultUrl(DEFAULT_VAULT_URL);
       setVaultApiKey(config.vaultApiKey);
-      setDefaultFolder(config.defaultFolder);
       setVaultName(config.vaultName);
       setVaultOrganization(config.vaultOrganization);
       setTagGroups(config.tagGroups);
       setSummaryDetailLevel(config.summaryDetailLevel);
-      // Derive preset from stored URL
-      const matchingPreset = VAULT_URL_PRESETS.find(
-        (p) => p.value === config.vaultUrl
-      );
-      setVaultUrlPreset(matchingPreset ? matchingPreset.value : "custom");
     });
   }, []);
 
@@ -63,46 +56,74 @@ export function Settings() {
     setSaveStatus("idle");
     setLlmStatus("idle");
     setVaultStatus("idle");
+    setVaultErrorMsg(undefined);
   }, []);
 
-  const handleTestConnection = useCallback(async () => {
+  const handleSaveSettings = useCallback(async () => {
+    // Start testing
+    setSaveStatus("saving");
     setLlmStatus("testing");
     setVaultStatus("testing");
+    setVaultErrorMsg(undefined);
 
-    const [llmOk, vaultOk] = await Promise.all([
+    // Test connections
+    const [llmOk, vaultResult] = await Promise.all([
       apiKey
         ? testOpenRouterConnection(apiKey).catch(() => false)
         : Promise.resolve(false),
       vaultApiKey
         ? new VaultClient(vaultUrl, vaultApiKey)
             .testConnection()
-            .catch(() => false)
-        : Promise.resolve(false),
+            .then((r) => r)
+            .catch(() => ({ ok: false, error: "Connection failed" }))
+        : Promise.resolve({ ok: false, error: "No API key" }),
     ]);
 
+    // Update connection status
     setLlmStatus(llmOk ? "success" : "error");
-    setVaultStatus(vaultOk ? "success" : "error");
-  }, [apiKey, vaultUrl, vaultApiKey]);
 
-  const handleSave = useCallback(async () => {
-    setSaveStatus("saving");
-    await Promise.all([
-      setSyncStorage("apiKey", apiKey),
-      setSyncStorage("vaultUrl", vaultUrl),
-      setSyncStorage("vaultApiKey", vaultApiKey),
-      setSyncStorage("defaultFolder", defaultFolder),
-      setSyncStorage("vaultName", vaultName),
-      setSyncStorage("vaultOrganization", vaultOrganization),
-      setSyncStorage("tagGroups", tagGroups),
-      setSyncStorage("summaryDetailLevel", summaryDetailLevel),
-    ]);
-    setDirty(false);
-    setSaveStatus("saved");
+    let vaultOk = false;
+    if (vaultResult.ok) {
+      if ("authenticated" in vaultResult && vaultResult.authenticated) {
+        setVaultStatus("success");
+        setVaultErrorMsg(undefined);
+        vaultOk = true;
+      } else {
+        setVaultStatus("error");
+        setVaultErrorMsg("Authentication failed");
+      }
+    } else {
+      setVaultStatus("error");
+      const errorMsg = ("error" in vaultResult && vaultResult.error) || "Connection failed";
+      // Show clearer message for authentication failures
+      if (errorMsg.includes("authentication failed") || errorMsg.includes("API key")) {
+        setVaultErrorMsg("Authentication failed");
+      } else {
+        setVaultErrorMsg(errorMsg);
+      }
+    }
+
+    // Only save if both connections succeed
+    if (llmOk && vaultOk) {
+      await Promise.all([
+        setSyncStorage("apiKey", apiKey),
+        setSyncStorage("vaultUrl", vaultUrl),
+        setSyncStorage("vaultApiKey", vaultApiKey),
+        setSyncStorage("vaultName", vaultName),
+        setSyncStorage("vaultOrganization", vaultOrganization),
+        setSyncStorage("tagGroups", tagGroups),
+        setSyncStorage("summaryDetailLevel", summaryDetailLevel),
+      ]);
+      setDirty(false);
+      setSaveStatus("saved");
+    } else {
+      // Reset save status on connection failure
+      setSaveStatus("idle");
+    }
   }, [
     apiKey,
     vaultUrl,
     vaultApiKey,
-    defaultFolder,
     vaultName,
     vaultOrganization,
     tagGroups,
@@ -140,37 +161,13 @@ export function Settings() {
       </div>
 
       <div className="form-group">
-        <label htmlFor="vaultUrlPreset">Obsidian Vault URL</label>
-        <select
-          id="vaultUrlPreset"
-          value={vaultUrlPreset}
-          onChange={(e) => {
-            const selected = e.target.value;
-            setVaultUrlPreset(selected);
-            if (selected !== "custom") {
-              setVaultUrl(selected);
-            }
-            markDirty();
-          }}
-        >
-          {VAULT_URL_PRESETS.map((preset) => (
-            <option key={preset.value} value={preset.value}>
-              {preset.label}
-            </option>
-          ))}
-        </select>
-        {vaultUrlPreset === "custom" && (
-          <input
-            id="vaultUrl"
-            type="text"
-            value={vaultUrl}
-            onChange={(e) => {
-              setVaultUrl(e.target.value);
-              markDirty();
-            }}
-            placeholder="https://your-obsidian-url:port"
-          />
-        )}
+        <label>Obsidian Vault URL</label>
+        <div style={{ padding: '8px 12px', backgroundColor: 'var(--bg-secondary)', borderRadius: '4px', fontFamily: 'monospace', fontSize: '13px' }}>
+          {DEFAULT_VAULT_URL}
+        </div>
+        <span className="form-hint">
+          Using HTTP (port 27123). HTTPS not supported in Chrome extensions with self-signed certificates.
+        </span>
       </div>
 
       <div className="form-group">
@@ -203,20 +200,6 @@ export function Settings() {
         {vaultApiKeyError && (
           <span className="form-error">{vaultApiKeyError}</span>
         )}
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="defaultFolder">Default Folder</label>
-        <input
-          id="defaultFolder"
-          type="text"
-          value={defaultFolder}
-          onChange={(e) => {
-            setDefaultFolder(e.target.value);
-            markDirty();
-          }}
-          placeholder={DEFAULT_FOLDER}
-        />
       </div>
 
       <div className="form-group">
@@ -279,9 +262,9 @@ export function Settings() {
 
       <div className="form-group">
         <label>Summary Detail Level</label>
-        <div className="radio-group">
+        <div className="radio-group summary-detail-group">
           {SUMMARY_DETAIL_OPTIONS.map((option) => (
-            <label key={option.value} className="radio-option">
+            <label key={option.value} className="radio-option summary-detail-option">
               <input
                 type="radio"
                 name="summaryDetailLevel"
@@ -302,7 +285,18 @@ export function Settings() {
       </div>
 
       <div className="form-group">
-        <label>Tag Groups</label>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+          <label>Tag Groups</label>
+          <a
+            href="https://2vault.dev/#tag-groups"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:text-primary-hover"
+            style={{ fontSize: '13px', textDecoration: 'none' }}
+          >
+            Learn more →
+          </a>
+        </div>
         <span className="form-hint">
           Define tag groups for consistent categorization. The AI will prefer
           tags from these groups.
@@ -316,67 +310,46 @@ export function Settings() {
         />
       </div>
 
-      <div className="form-actions">
-        <button
-          className="btn btn-secondary"
-          onClick={handleTestConnection}
-          disabled={llmStatus === "testing" || vaultStatus === "testing"}
-        >
-          {llmStatus === "testing" || vaultStatus === "testing"
-            ? "Testing..."
-            : "Test Connections"}
-        </button>
-      </div>
-
-      {(llmStatus !== "idle" || vaultStatus !== "idle") && (
+      {(llmStatus === "error" || vaultStatus === "error") && (
         <div className="connection-results">
-          <div className="connection-result">
-            <span>OpenRouter API:</span>
-            {llmStatus === "testing" && (
-              <span className="status-testing">Testing...</span>
-            )}
-            {llmStatus === "success" && (
-              <span className="status-success">Connected</span>
-            )}
-            {llmStatus === "error" && (
+          {llmStatus === "error" && (
+            <div className="connection-result">
+              <span>OpenRouter API:</span>
               <span className="status-error">
                 {apiKey ? "Connection failed" : "No API key"}
               </span>
-            )}
-          </div>
-          <div className="connection-result">
-            <span>Obsidian Vault:</span>
-            {vaultStatus === "testing" && (
-              <span className="status-testing">Testing...</span>
-            )}
-            {vaultStatus === "success" && (
-              <span className="status-success">Connected</span>
-            )}
-            {vaultStatus === "error" && (
+            </div>
+          )}
+          {vaultStatus === "error" && (
+            <div className="connection-result">
+              <span>Obsidian Vault:</span>
               <span className="status-error">
-                {vaultApiKey ? "Connection failed" : "No API key"}
+                {vaultApiKey ? (vaultErrorMsg || "Connection failed") : "No API key"}
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
       <div className="form-actions">
         <button
           className="btn btn-primary"
-          onClick={handleSave}
+          onClick={handleSaveSettings}
           disabled={
             saveStatus === "saving" ||
-            !dirty ||
+            llmStatus === "testing" ||
+            vaultStatus === "testing" ||
             !!apiKeyError ||
             !!vaultApiKeyError
           }
         >
-          {saveStatus === "saving" ? "Saving..." : "Save Settings"}
+          {saveStatus === "saving" || llmStatus === "testing" || vaultStatus === "testing"
+            ? "Saving..."
+            : "Save Settings"}
         </button>
 
         {saveStatus === "saved" && (
-          <span className="status-success">Saved</span>
+          <span className="status-success">Settings saved successfully</span>
         )}
       </div>
     </div>

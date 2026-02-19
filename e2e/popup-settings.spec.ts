@@ -10,7 +10,6 @@ test.describe("Settings Tab", () => {
     await expect(page.locator("#apiKey")).toBeVisible();
     await expect(page.locator("#vaultUrlPreset")).toBeVisible();
     await expect(page.locator("#vaultApiKey")).toBeVisible();
-    await expect(page.locator("#defaultFolder")).toBeVisible();
     await expect(page.locator("#vaultName")).toBeVisible();
   });
 
@@ -18,7 +17,6 @@ test.describe("Settings Tab", () => {
     await seedSettings(page, {
       apiKey: "sk-or-test-key-1234567890",
       vaultApiKey: "my-vault-key-12345",
-      defaultFolder: "Resources",
       vaultName: "TestVault",
     });
     // Reload to pick up seeded values
@@ -26,7 +24,6 @@ test.describe("Settings Tab", () => {
     await page.waitForSelector(".app");
     await page.click('button[role="tab"]:has-text("Settings")');
 
-    await expect(page.locator("#defaultFolder")).toHaveValue("Resources");
     await expect(page.locator("#vaultName")).toHaveValue("TestVault");
   });
 
@@ -107,7 +104,7 @@ test.describe("Settings Tab", () => {
     await expect(saveBtn).toBeDisabled();
 
     // Make a change
-    await page.fill("#defaultFolder", "NewFolder");
+    await page.fill("#vaultName", "NewVault");
     await expect(saveBtn).toBeEnabled();
   });
 
@@ -115,7 +112,6 @@ test.describe("Settings Tab", () => {
     await page.click('button[role="tab"]:has-text("Settings")');
     await page.fill("#apiKey", "sk-or-my-test-key-12345678");
     await page.fill("#vaultApiKey", "vault-key-12345");
-    await page.fill("#defaultFolder", "TestFolder");
     await page.fill("#vaultName", "MyVault");
 
     await page.click('button:has-text("Save Settings")');
@@ -124,12 +120,10 @@ test.describe("Settings Tab", () => {
     const stored = await readSyncStorage(page, [
       "apiKey",
       "vaultApiKey",
-      "defaultFolder",
       "vaultName",
     ]);
     expect(stored["apiKey"]).toBe("sk-or-my-test-key-12345678");
     expect(stored["vaultApiKey"]).toBe("vault-key-12345");
-    expect(stored["defaultFolder"]).toBe("TestFolder");
     expect(stored["vaultName"]).toBe("MyVault");
   });
 

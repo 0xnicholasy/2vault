@@ -6,7 +6,7 @@ import { VaultClientError } from "@/core/types";
 
 function createMockClient(overrides?: Partial<VaultClient>): VaultClient {
   return {
-    testConnection: vi.fn<() => Promise<boolean>>().mockResolvedValue(true),
+    testConnection: vi.fn().mockResolvedValue({ ok: true, authenticated: true }),
     listFolders: vi
       .fn<() => Promise<string[]>>()
       .mockResolvedValue([

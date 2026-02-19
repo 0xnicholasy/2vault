@@ -47,25 +47,37 @@ beforeEach(() => {
 // -- testConnection -----------------------------------------------------------
 
 describe("VaultClient.testConnection", () => {
-  it("returns true when vault is reachable and authenticated", async () => {
+  it("returns ok+authenticated when vault is reachable and authenticated", async () => {
     mockFetch.mockResolvedValue(healthResponse(true));
     const client = new VaultClient(VAULT_URL, API_KEY);
 
-    expect(await client.testConnection()).toBe(true);
+    expect(await client.testConnection()).toEqual({ ok: true, authenticated: true });
   });
 
-  it("returns false when not authenticated", async () => {
-    mockFetch.mockResolvedValue(healthResponse(false));
+  it("returns error when search fails with 401", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === `${VAULT_URL}/`) {
+        return Promise.resolve(healthResponse(false));
+      }
+      if (url.includes("/search/simple/")) {
+        return Promise.resolve(new Response("Unauthorized", { status: 401 }));
+      }
+      return Promise.reject(new Error("Unexpected URL"));
+    });
     const client = new VaultClient(VAULT_URL, API_KEY);
 
-    expect(await client.testConnection()).toBe(false);
+    const result = await client.testConnection();
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("API key authentication failed");
   });
 
-  it("returns false on network failure", async () => {
+  it("returns not ok on network failure", async () => {
     mockFetch.mockRejectedValue(new TypeError("Failed to fetch"));
     const client = new VaultClient(VAULT_URL, API_KEY);
 
-    expect(await client.testConnection()).toBe(false);
+    const result = await client.testConnection();
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeDefined();
   });
 
   it("sends correct Authorization header", async () => {
@@ -80,14 +92,97 @@ describe("VaultClient.testConnection", () => {
     );
   });
 
-  it("calls the root endpoint", async () => {
-    mockFetch.mockResolvedValue(healthResponse(true));
+  it("calls health endpoint and search endpoint", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === `${VAULT_URL}/`) {
+        return Promise.resolve(healthResponse(true));
+      }
+      if (url.includes("/search/simple/")) {
+        return Promise.resolve(jsonResponse([]));
+      }
+      return Promise.reject(new Error("Unexpected URL"));
+    });
     const client = new VaultClient(VAULT_URL, API_KEY);
 
     await client.testConnection();
 
-    const [url] = mockFetch.mock.calls[0] as [string];
-    expect(url).toBe(`${VAULT_URL}/`);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/search/simple/"),
+      expect.anything()
+    );
+  });
+
+  it("returns not ok when health.status is not 'OK'", async () => {
+    mockFetch.mockResolvedValue(healthResponse(true, "DEGRADED"));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    const result = await client.testConnection();
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("non-OK status");
+  });
+
+  it("returns not ok on timeout (AbortError)", async () => {
+    mockFetch.mockRejectedValue(
+      new DOMException("The operation was aborted", "AbortError")
+    );
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    const result = await client.testConnection();
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it("returns not ok on HTTP 500 server error", async () => {
+    mockFetch.mockResolvedValue(new Response("Internal Server Error", { status: 500 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    const result = await client.testConnection();
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("HTTP 500");
+  });
+
+  it("returns not ok on HTTP 401 unauthorized", async () => {
+    mockFetch.mockResolvedValue(new Response("Unauthorized", { status: 401 }));
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    const result = await client.testConnection();
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("HTTP 401");
+  });
+
+  it("returns ok when search operation succeeds even if health.authenticated missing", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url === `${VAULT_URL}/`) {
+        return Promise.resolve(
+          jsonResponse({ status: "OK", service: "Obsidian Local REST API", versions: { self: "1.0.0" } })
+        );
+      }
+      if (url.includes("/search/simple/")) {
+        return Promise.resolve(jsonResponse([])); // Search succeeds
+      }
+      return Promise.reject(new Error("Unexpected URL"));
+    });
+    const client = new VaultClient(VAULT_URL, API_KEY);
+
+    expect(await client.testConnection()).toEqual({ ok: true, authenticated: true });
+  });
+
+  it("verifies vault access with real search operation", async () => {
+    const HTTP_VAULT_URL = "http://localhost:27123";
+    // Mock health check + search operation
+    mockFetch.mockImplementation((url: string) => {
+      if (url === `${HTTP_VAULT_URL}/`) {
+        return Promise.resolve(healthResponse(false));
+      }
+      if (url.includes("/search/simple/")) {
+        return Promise.resolve(jsonResponse([])); // Empty search results = auth working
+      }
+      return Promise.reject(new Error("Unexpected URL"));
+    });
+    const client = new VaultClient(HTTP_VAULT_URL, API_KEY);
+
+    // Now actually verifies vault access with searchNotes
+    expect(await client.testConnection()).toEqual({ ok: true, authenticated: true });
   });
 });
 

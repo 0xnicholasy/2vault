@@ -205,7 +205,8 @@ describe("linkedin-extractor - fallback", () => {
       writable: true,
     });
     const result = fallbackExtraction("https://linkedin.com/post/123", "reason");
-    expect(result.status).toBe("success");
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("fallback");
     expect(result.title).toBe("LinkedIn Post");
     expect(result.content).toBe("Fallback body text here");
   });

@@ -2,7 +2,7 @@ import type { ExtractedContent } from "@/core/types";
 import type { ExtractContentMessage, ExtractionResultMessage } from "@/background/messages";
 
 /** Selector version - bump when Twitter changes their DOM structure */
-const SELECTOR_VERSION = 1;
+const SELECTOR_VERSION = 2; // v2: Added multi-selector fallback strategy
 
 const SELECTORS = {
   tweet: 'article[data-testid="tweet"]',
@@ -13,12 +13,34 @@ const SELECTORS = {
   imageAlt: 'img[alt]:not([alt=""])',
 } as const;
 
+/** Fallback selectors to try when primary selectors fail */
+const FALLBACK_SELECTORS = {
+  tweetText: [
+    '[data-testid="tweetText"]',                    // Primary selector
+    'div[lang][dir="auto"]',                        // Twitter uses lang + dir on tweet text
+    'div[data-testid="tweetDetail"] div[lang]',     // Tweet detail view
+    'article div[lang]:not([data-testid])',         // Generic lang div in article
+  ],
+} as const;
+
 const MAX_BODY_TEXT = 8_000;
 const MAX_REPLIES = 5;
 
 function extractTweetText(article: Element): string {
-  const tweetText = article.querySelector(SELECTORS.tweetText);
-  return tweetText?.textContent?.trim() ?? "";
+  // Try each fallback selector in order until we find content
+  for (const selector of FALLBACK_SELECTORS.tweetText) {
+    const element = article.querySelector(selector);
+    const text = element?.textContent?.trim() ?? "";
+    if (text && text.length > 0) {
+      if (selector !== SELECTORS.tweetText) {
+        console.log(`[2Vault] Found tweet text using fallback selector: ${selector}`);
+      }
+      return text;
+    }
+  }
+
+  console.warn("[2Vault] All tweetText selectors failed");
+  return "";
 }
 
 function extractAuthor(article: Element): { name: string; handle: string } {
@@ -219,7 +241,45 @@ function extractFromDom(): ExtractedContent {
 function fallbackExtraction(url: string, reason: string): ExtractedContent {
   console.warn(`[2Vault] Twitter extraction fallback (v${SELECTOR_VERSION}): ${reason}`);
 
+  // Diagnostic logging for debugging selector failures
+  const articleCount = document.querySelectorAll(SELECTORS.tweet).length;
+  const hasUserName = !!document.querySelector(SELECTORS.userName);
+  const hasTweetText = !!document.querySelector(SELECTORS.tweetText);
+
+  console.error(`[2Vault] DOM state: articles=${articleCount}, userName=${hasUserName}, tweetText=${hasTweetText}`);
+
+  // Strategy 1: Try smart extraction from article element first
+  if (articleCount > 0) {
+    const article = document.querySelector(SELECTORS.tweet);
+    console.log(`[2Vault] Fallback: article element ${article ? "found" : "NOT FOUND"}`);
+    if (article) {
+      const smartText = smartExtractFromArticle(article);
+      console.log(`[2Vault] Fallback: smartText length=${smartText.length}`);
+      if (smartText && smartText.length > 50) {
+        console.log(`[2Vault] Smart fallback extracted ${smartText.length} chars from article`);
+        return {
+          url,
+          title: "X Post (smart fallback)",
+          content: smartText,
+          author: null,
+          datePublished: null,
+          wordCount: smartText.split(/\s+/).filter(Boolean).length,
+          type: "social-media",
+          platform: "x",
+          status: "review", // Mark as review instead of failed
+          error: `Smart fallback extraction: ${reason}`,
+        };
+      }
+    }
+  }
+
+  // Strategy 2: Filter navigation junk from body text
   const bodyText = (document.body.innerText ?? "").slice(0, MAX_BODY_TEXT).trim();
+
+  if (bodyText) {
+    console.error(`[2Vault] Body text preview (first 200 chars): ${bodyText.slice(0, 200)}`);
+  }
+
   if (!bodyText) {
     return {
       url,
@@ -231,25 +291,89 @@ function fallbackExtraction(url: string, reason: string): ExtractedContent {
       type: "social-media",
       platform: "x",
       status: "failed",
-      error: `Extraction failed: ${reason}`,
+      error: `Extraction failed: ${reason} (DOM empty, articles=${articleCount})`,
     };
   }
 
+  const filteredText = filterNavigationText(bodyText);
+  const finalText = filteredText || bodyText;
+
   return {
     url,
-    title: "X Post",
-    content: bodyText,
+    title: "X Post (fallback)",
+    content: finalText,
     author: null,
     datePublished: null,
-    wordCount: bodyText.split(/\s+/).filter(Boolean).length,
+    wordCount: finalText.split(/\s+/).filter(Boolean).length,
     type: "social-media",
     platform: "x",
-    status: "success",
+    status: "review", // Mark as review instead of failed - user can verify
+    error: `Fallback extraction: ${reason} (articles=${articleCount})`,
   };
 }
 
+/**
+ * Smart extraction: find text content within article, excluding navigation
+ */
+function smartExtractFromArticle(article: Element): string {
+  const langDivs = article.querySelectorAll("div[lang]");
+  console.log(`[2Vault] Smart extract: found ${langDivs.length} div[lang] elements in article`);
+
+  const texts: string[] = [];
+
+  for (const div of langDivs) {
+    const text = div.textContent?.trim() ?? "";
+    console.log(`[2Vault] Smart extract: div[lang] text length=${text.length}, isNav=${isNavigationText(text)}, preview="${text.slice(0, 50)}"`);
+
+    // Filter out very short text (likely UI labels) and navigation
+    if (text.length > 20 && !isNavigationText(text)) {
+      texts.push(text);
+    }
+  }
+
+  console.log(`[2Vault] Smart extract: extracted ${texts.length} text blocks, total length=${texts.join("\n\n").length}`);
+  return texts.join("\n\n");
+}
+
+/**
+ * Filter out navigation/UI text from body text
+ */
+function filterNavigationText(text: string): string {
+  const lines = text.split("\n").map((line) => line.trim());
+  const filtered = lines.filter((line) => {
+    if (line.length < 10) return false; // Too short, likely UI label
+
+    // Common navigation terms (English and Chinese)
+    const navPatterns = [
+      /^(home|explore|notifications|messages|grok|bookmarks|premium|profile|more)$/i,
+      /^(首頁|探索|通知|聊天|書籤|個人資料|更多|發佈)$/,
+      /^(若要查看|查看鍵盤快速鍵|鍵盤快速鍵)/,
+      /^(創作者工作室|premium|訂閱|subscribe|follow)/i,
+      /^\d+$/, // Pure numbers (like engagement counts)
+    ];
+
+    return !navPatterns.some((pattern) => pattern.test(line));
+  });
+
+  return filtered.join("\n");
+}
+
+/**
+ * Check if text is navigation/UI element
+ */
+function isNavigationText(text: string): boolean {
+  const navPatterns = [
+    /^(home|explore|notifications|messages|grok|bookmarks|premium|profile|more)$/i,
+    /^(首頁|探索|通知|聊天|書籤|個人資料|更多|發佈)$/,
+    /^(若要查看|查看鍵盤快速鍵)/,
+    /^(創作者工作室|premium)/i,
+  ];
+
+  return navPatterns.some((pattern) => pattern.test(text.trim()));
+}
+
 const TWEET_POLL_INTERVAL_MS = 500;
-const TWEET_POLL_TIMEOUT_MS = 10_000;
+const TWEET_POLL_TIMEOUT_MS = 30_000; // Increased from 10s to allow React hydration in background tabs
 
 /**
  * Poll for tweet article element to appear in the DOM.
@@ -260,32 +384,69 @@ async function waitForTweetElement(): Promise<Element | null> {
   const startTime = Date.now();
 
   while (Date.now() - startTime < TWEET_POLL_TIMEOUT_MS) {
+    // Early failure detection for known error states (fail fast instead of waiting 30s)
+    const bodyText = document.body.innerText || "";
+    const errorPatterns = [
+      /something went wrong/i,
+      /rate limit/i,
+      /suspended/i,
+      /unavailable/i,
+      /doesn't exist/i,
+      /try again later/i,
+    ];
+
+    for (const pattern of errorPatterns) {
+      if (pattern.test(bodyText)) {
+        console.warn(`[2Vault] Twitter error page detected: ${pattern}. Failing fast.`);
+        return null;
+      }
+    }
+
     const article = document.querySelector(SELECTORS.tweet);
-    if (article) return article;
+    if (article) {
+      const elapsed = Date.now() - startTime;
+      console.log(`[2Vault] Tweet element found after ${elapsed}ms`);
+      return article;
+    }
+
     await new Promise((resolve) => setTimeout(resolve, TWEET_POLL_INTERVAL_MS));
   }
 
+  const elapsed = Date.now() - startTime;
+  console.warn(`[2Vault] Tweet element not found after ${elapsed}ms timeout`);
   return null;
 }
 
-// Listen for extraction requests from service worker
-chrome.runtime.onMessage.addListener(
-  (
-    message: ExtractContentMessage,
-    _sender: chrome.runtime.MessageSender,
-    sendResponse: (response: ExtractionResultMessage) => void
-  ) => {
-    if (message.type === "EXTRACT_CONTENT") {
-      // Async handler: wait for tweet DOM to hydrate before extracting
-      waitForTweetElement().then(() => {
-        const result = extractFromDom();
-        sendResponse({ type: "EXTRACTION_RESULT", data: result });
-      });
-      return true; // Keep message channel open for async response
+// Prevent duplicate listener registration when script is re-injected via
+// chrome.scripting.executeScript (each injection runs the file again in the
+// same isolated world, which would add another onMessage listener).
+const LISTENER_KEY = "__2vault_twitter_listener";
+const _g = globalThis as unknown as Record<string, boolean>;
+
+if (!_g[LISTENER_KEY]) {
+  _g[LISTENER_KEY] = true;
+
+  // Listen for extraction requests from service worker.
+  // No concurrency guard: each message gets its own sendResponse callback,
+  // so parallel waitForTweetElement calls are safe and let the retry loop
+  // receive whichever response arrives first.
+  chrome.runtime.onMessage.addListener(
+    (
+      message: ExtractContentMessage,
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response: ExtractionResultMessage) => void
+    ) => {
+      if (message.type === "EXTRACT_CONTENT") {
+        waitForTweetElement().then(() => {
+          const result = extractFromDom();
+          sendResponse({ type: "EXTRACTION_RESULT", data: result });
+        });
+        return true; // Keep message channel open for async response
+      }
+      return false;
     }
-    return false;
-  }
-);
+  );
+}
 
 // Export for testing
 export {
@@ -300,7 +461,11 @@ export {
   extractSingleTweet,
   fallbackExtraction,
   waitForTweetElement,
+  smartExtractFromArticle,
+  filterNavigationText,
+  isNavigationText,
   SELECTORS,
+  FALLBACK_SELECTORS,
   SELECTOR_VERSION,
   MAX_REPLIES,
 };

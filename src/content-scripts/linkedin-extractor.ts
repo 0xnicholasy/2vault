@@ -171,24 +171,32 @@ function fallbackExtraction(url: string, reason: string): ExtractedContent {
     wordCount: bodyText.split(/\s+/).filter(Boolean).length,
     type: "social-media",
     platform: "linkedin",
-    status: "success",
+    status: "failed",
+    error: `LinkedIn extraction failed (fallback): ${reason}`,
   };
 }
 
-// Listen for extraction requests from service worker
-chrome.runtime.onMessage.addListener(
-  (
-    message: ExtractContentMessage,
-    _sender: chrome.runtime.MessageSender,
-    sendResponse: (response: ExtractionResultMessage) => void
-  ) => {
-    if (message.type === "EXTRACT_CONTENT") {
-      const result = extractFromDom();
-      sendResponse({ type: "EXTRACTION_RESULT", data: result });
+// Prevent duplicate listener registration when script is re-injected
+const LISTENER_KEY = "__2vault_linkedin_listener";
+const _g = globalThis as unknown as Record<string, boolean>;
+
+if (!_g[LISTENER_KEY]) {
+  _g[LISTENER_KEY] = true;
+
+  chrome.runtime.onMessage.addListener(
+    (
+      message: ExtractContentMessage,
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response: ExtractionResultMessage) => void
+    ) => {
+      if (message.type === "EXTRACT_CONTENT") {
+        const result = extractFromDom();
+        sendResponse({ type: "EXTRACTION_RESULT", data: result });
+      }
+      return false; // Synchronous response
     }
-    return false; // Synchronous response
-  }
-);
+  );
+}
 
 // Export for testing
 export {

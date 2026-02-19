@@ -42,7 +42,7 @@ setupChromeMock();
 
 vi.mock("@/core/vault-client", () => ({
   VaultClient: vi.fn().mockImplementation(() => ({
-    testConnection: vi.fn().mockResolvedValue(true),
+    testConnection: vi.fn().mockResolvedValue({ ok: true, authenticated: true }),
   })),
 }));
 
@@ -79,7 +79,6 @@ beforeEach(() => {
   mockSyncStore["apiKey"] = "sk-test";
   mockSyncStore["vaultApiKey"] = "vault-test";
   mockSyncStore["vaultUrl"] = "https://localhost:27124";
-  mockSyncStore["defaultFolder"] = "Inbox";
   mockSyncStore["vaultName"] = "";
 
   setupChromeMock();

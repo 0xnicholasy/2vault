@@ -65,8 +65,8 @@ function loadUrls(): string[] {
 async function testVaultConnection(config: Config): Promise<boolean> {
   const client = new VaultClient(config.vaultUrl, config.vaultApiKey);
   try {
-    const ok = await client.testConnection();
-    return ok;
+    const result = await client.testConnection();
+    return result.ok && result.authenticated;
   } catch {
     return false;
   }
@@ -99,7 +99,10 @@ async function main() {
     llmProvider: "openrouter",
     vaultUrl,
     vaultApiKey,
-    defaultFolder: "Inbox",
+    vaultName: "2Vault-Test",
+    vaultOrganization: "para",
+    tagGroups: [],
+    summaryDetailLevel: "standard",
   };
 
   console.log("LLM Provider: openrouter");
@@ -167,9 +170,6 @@ async function main() {
   // 6. Print metrics
   const successes = results.filter((r) => r.status === "success");
   const failures = results.filter((r) => r.status === "failed");
-  const nonDefaultFolder = successes.filter(
-    (r) => r.folder && r.folder !== config.defaultFolder
-  );
 
   console.log("\n--- Metrics ---\n");
   console.log(`Total URLs:              ${results.length}`);
@@ -177,9 +177,6 @@ async function main() {
   console.log(`Failures:                ${failures.length}`);
   console.log(
     `Extraction success rate: ${((successes.length / results.length) * 100).toFixed(1)}% (target: >85%)`
-  );
-  console.log(
-    `Categorized (non-default): ${((nonDefaultFolder.length / Math.max(successes.length, 1)) * 100).toFixed(1)}%`
   );
   console.log(`Total time:              ${(elapsed / 1000).toFixed(1)}s`);
   console.log(
@@ -193,7 +190,7 @@ async function main() {
     JSON.stringify(
       {
         timestamp: new Date().toISOString(),
-        config: { llmProvider: "openrouter", vaultUrl, defaultFolder: config.defaultFolder },
+        config: { llmProvider: "openrouter", vaultUrl, vaultOrganization: config.vaultOrganization },
         metrics: {
           total: results.length,
           successes: successes.length,

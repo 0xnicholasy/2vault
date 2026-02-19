@@ -367,6 +367,40 @@ a:hover {
   line-height: 1.6;
 }
 
+.status-guide {
+  margin-top: 24px;
+  padding: 16px;
+  border-radius: 6px;
+  background: var(--ctp-surface0);
+  border: 1px solid var(--ctp-surface1);
+}
+
+.status-guide h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ctp-text);
+  margin-bottom: 12px;
+}
+
+.status-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.status-list li {
+  font-size: 13px;
+  color: var(--ctp-subtext1);
+  line-height: 1.6;
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.status-list li strong {
+  color: var(--ctp-text);
+  font-weight: 600;
+}
+
 .completion-actions {
   justify-content: center;
   padding-top: 8px;

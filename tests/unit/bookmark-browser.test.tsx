@@ -84,7 +84,10 @@ beforeEach(() => {
     llmProvider: "openrouter",
     vaultUrl: "https://localhost:27124",
     vaultApiKey: "vault-key",
-    defaultFolder: "Inbox",
+    vaultName: "TestVault",
+    vaultOrganization: "para" as const,
+    tagGroups: [],
+    summaryDetailLevel: "standard" as const,
   });
 });
 
@@ -211,7 +214,10 @@ describe("BookmarkBrowser", () => {
       llmProvider: "openrouter",
       vaultUrl: "https://localhost:27124",
       vaultApiKey: "",
-      defaultFolder: "Inbox",
+      vaultName: "TestVault",
+    vaultOrganization: "para" as const,
+    tagGroups: [],
+    summaryDetailLevel: "standard" as const,
     });
 
     const onProcess = vi.fn();

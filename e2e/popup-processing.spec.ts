@@ -123,6 +123,7 @@ test.describe("Processing Modal", () => {
           url: "https://example.com/fail",
           status: "failed",
           error: "LLM rate limit exceeded",
+          errorCategory: "llm",
         },
       ],
       urlStatuses: { "https://example.com/fail": "failed" },
@@ -268,7 +269,7 @@ test.describe("Processing Modal", () => {
     const state: ProcessingState = {
       active: false,
       urls: ["https://example.com/1"],
-      results: [{ url: "https://example.com/1", status: "failed", error: "Config error" }],
+      results: [{ url: "https://example.com/1", status: "failed", error: "Config error", errorCategory: "llm" }],
       urlStatuses: { "https://example.com/1": "failed" },
       startedAt: Date.now(),
       cancelled: false,

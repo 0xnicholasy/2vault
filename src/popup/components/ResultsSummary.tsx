@@ -10,9 +10,10 @@ import {
 } from "react-icons/io5";
 import type { ProcessingResult, ContentQualityReason } from "@/core/types";
 import { formatUrl, buildObsidianUri } from "@/popup/utils/processing-ui";
-import { ERROR_SUGGESTIONS, QUALITY_SUGGESTIONS } from "@/utils/error-suggestions";
+import { ErrorDisplay, ReviewDisplay } from "./ErrorDisplay";
 
-type Filter = "all" | "failures" | "skipped" | "review";
+type Filter = "all" | "failures" | "timeout" | "skipped" | "review";
+type Tab = "settings" | "bookmarks" | "status";
 
 interface ResultsSummaryProps {
   results: ProcessingResult[];
@@ -20,6 +21,9 @@ interface ResultsSummaryProps {
   onRetry: (urls: string[]) => void;
   onProcessMore: () => void;
   onClearHistory: () => void;
+  onSwitchTab?: (tab: Tab) => void;
+  onRemoveResult?: (url: string) => void;
+  onSkipResult?: (url: string) => void;
 }
 
 export function ResultsSummary({
@@ -28,9 +32,13 @@ export function ResultsSummary({
   onRetry,
   onProcessMore,
   onClearHistory,
+  onSwitchTab,
+  onRemoveResult,
+  onSkipResult,
 }: ResultsSummaryProps) {
   const [filter, setFilter] = useState<Filter>("all");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
   if (results.length === 0) {
     return (
@@ -41,22 +49,33 @@ export function ResultsSummary({
   }
 
   const failedResults = results.filter((r) => r.status === "failed");
+  const timeoutResults = results.filter((r) => r.status === "timeout");
   const skippedResults = results.filter((r) => r.status === "skipped");
   const reviewResults = results.filter((r) => r.status === "review");
-  const failedUrls = failedResults.map((r) => r.url);
+  const retryUrls = [...failedResults, ...timeoutResults].map((r) => r.url);
   const allFailed = failedResults.length === results.length;
   const hasFailures = failedResults.length > 0;
+  const hasTimeout = timeoutResults.length > 0;
   const hasSkipped = skippedResults.length > 0;
   const hasReview = reviewResults.length > 0;
 
   const displayed =
     filter === "failures"
       ? failedResults
-      : filter === "skipped"
-        ? skippedResults
-        : filter === "review"
-          ? reviewResults
-          : results;
+      : filter === "timeout"
+        ? timeoutResults
+        : filter === "skipped"
+          ? skippedResults
+          : filter === "review"
+            ? reviewResults
+            : results;
+
+  const handleCopyUrl = (url: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(url);
+    setCopiedUrl(url);
+    setTimeout(() => setCopiedUrl(null), 2000);
+  };
 
   const toggleRow = (index: number) => {
     setExpandedRows((prev) => {
@@ -68,6 +87,75 @@ export function ResultsSummary({
       }
       return next;
     });
+  };
+
+  const handleOpenUrl = (url: string) => {
+    chrome.tabs.create({ url });
+  };
+
+  const handleGoToSettings = () => {
+    if (onSwitchTab) {
+      onSwitchTab("settings");
+    }
+  };
+
+  const handleSkip = (url: string) => {
+    if (onSkipResult) {
+      onSkipResult(url);
+    }
+  };
+
+  const handleRemove = (url: string) => {
+    if (onRemoveResult) {
+      onRemoveResult(url);
+    }
+  };
+
+  const handleRetryUrl = (url: string) => {
+    onRetry([url]);
+  };
+
+  // Helper to determine if an error is retriable
+  const isRetriableError = (category: string): boolean => {
+    return ["network", "timeout", "llm", "vault", "unknown", "extraction"].includes(category);
+  };
+
+  // Helper to get user-friendly status label
+  const getStatusLabel = (result: ProcessingResult): string => {
+    if (result.status === "failed" || result.status === "timeout") {
+      const category = result.errorCategory ?? "unknown";
+
+      // Map error categories to user-friendly labels
+      const labelMap: Record<string, string> = {
+        network: "Connection Error",
+        "login-required": "Login Required",
+        "bot-protection": "Bot Protection",
+        "page-not-found": "Page Not Found",
+        extraction: "Couldn't Read Page",
+        llm: "API Error",
+        vault: "Vault Error",
+        timeout: "Timed Out",
+        unknown: "Unknown Error"
+      };
+
+      return labelMap[category] || category;
+    }
+
+    if (result.status === "review" && result.contentQuality?.reason) {
+      const reasonMap: Record<string, string> = {
+        "login-wall": "Requires Login",
+        "bot-protection": "Bot Protection",
+        "soft-404": "Page Not Found",
+        "deleted-content": "Content Deleted",
+        "insufficient-content": "Very Little Content",
+        "error-page": "Error Page"
+      };
+
+      return reasonMap[result.contentQuality.reason] || "Review";
+    }
+
+    // Capitalize first letter for other statuses
+    return result.status.charAt(0).toUpperCase() + result.status.slice(1);
   };
 
   return (
@@ -83,7 +171,7 @@ export function ResultsSummary({
           <div className="all-failed-banner-actions">
             <button
               className="btn btn-secondary btn-sm"
-              onClick={() => onRetry(failedUrls)}
+              onClick={() => onRetry(retryUrls)}
             >
               <IoRefresh /> Retry All
             </button>
@@ -106,6 +194,14 @@ export function ResultsSummary({
           >
             Failures ({failedResults.length})
           </button>
+          {hasTimeout && (
+            <button
+              className={`filter-btn ${filter === "timeout" ? "active" : ""}`}
+              onClick={() => setFilter("timeout")}
+            >
+              Timed Out ({timeoutResults.length})
+            </button>
+          )}
           {hasReview && (
             <button
               className={`filter-btn ${filter === "review" ? "active" : ""}`}
@@ -136,9 +232,10 @@ export function ResultsSummary({
         </thead>
         <tbody>
           {displayed.map((result, index) => {
-            const isFailed = result.status === "failed";
+            const isFailed = result.status === "failed" || result.status === "timeout";
             const isReview = result.status === "review";
-            const isExpandable = isFailed || isReview;
+            const isSkipped = result.status === "skipped";
+            const isExpandable = isFailed || isReview || (isSkipped && result.skipReason);
             const isExpanded = expandedRows.has(index);
             const category = result.errorCategory ?? "unknown";
             const qualityReason = result.contentQuality?.reason;
@@ -150,13 +247,23 @@ export function ResultsSummary({
                 title={isExpandable ? "Click to expand details" : undefined}
                 onClick={isExpandable ? () => toggleRow(index) : undefined}
               >
-                <td title={result.url}>{formatUrl(result.url)}</td>
+                <td
+                  className="url-cell"
+                  title={result.url}
+                  onClick={(e) => handleCopyUrl(result.url, e)}
+                >
+                  {copiedUrl === result.url ? (
+                    <span className="url-copied">Copied!</span>
+                  ) : (
+                    formatUrl(result.url)
+                  )}
+                </td>
                 <td>{result.folder ?? "-"}</td>
                 <td>
                   <span
                     className={`status-badge status-badge-${isFailed ? category : result.status}`}
                   >
-                    {isFailed ? category : result.status}
+                    {getStatusLabel(result)}
                   </span>
                   {isExpandable && (
                     <span className="error-toggle-icon">
@@ -168,32 +275,45 @@ export function ResultsSummary({
                     </span>
                   )}
                   {isFailed && isExpanded && (
-                    <div className="error-expanded-details">
-                      <div className="error-message">{result.error}</div>
-                      <div className="error-suggestion">
-                        {ERROR_SUGGESTIONS[category]}
-                      </div>
-                      <div className="error-actions">
-                        <button
-                          className="copy-url-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(result.url);
-                          }}
-                        >
-                          <IoCopy /> Copy URL
-                        </button>
-                      </div>
-                    </div>
+                    <ErrorDisplay
+                      category={category}
+                      errorMessage={result.error || "No error message available"}
+                      url={result.url}
+                      isRetryable={isRetriableError(category)}
+                      onRetry={() => handleRetryUrl(result.url)}
+                      onSkip={() => handleSkip(result.url)}
+                      onOpenUrl={() => handleOpenUrl(result.url)}
+                      onRemove={() => handleRemove(result.url)}
+                      onGoToSettings={handleGoToSettings}
+                    />
                   )}
-                  {isReview && isExpanded && (
-                    <div className="review-expanded-details">
-                      <div className="review-detail">{result.contentQuality?.detail}</div>
-                      {qualityReason && (
-                        <div className="error-suggestion">
-                          {QUALITY_SUGGESTIONS[qualityReason]}
-                        </div>
-                      )}
+                  {isReview && isExpanded && qualityReason && (
+                    <ReviewDisplay
+                      qualityReason={qualityReason}
+                      qualityDetail={result.contentQuality?.detail}
+                      url={result.url}
+                      onSkip={() => handleSkip(result.url)}
+                      onRemove={() => handleRemove(result.url)}
+                      onOpenUrl={() => handleOpenUrl(result.url)}
+                    />
+                  )}
+                  {isSkipped && isExpanded && result.skipReason && (
+                    <div className="skip-expanded-details">
+                      <div className="skip-reason-text">{result.skipReason}</div>
+                      <div className="error-actions">
+                        {onRemoveResult && (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemove(result.url);
+                            }}
+                            title="Remove from results"
+                          >
+                            <IoTrashOutline /> Remove
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </td>
@@ -221,10 +341,10 @@ export function ResultsSummary({
       </table>
 
       <div className="results-actions">
-        {hasFailures && !allFailed && (
+        {(hasFailures || hasTimeout) && !allFailed && (
           <button
             className="btn btn-secondary btn-sm"
-            onClick={() => onRetry(failedUrls)}
+            onClick={() => onRetry(retryUrls)}
           >
             <IoRefresh /> Retry Failed
           </button>

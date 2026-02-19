@@ -10,6 +10,8 @@ export function OnboardingApp() {
   const { currentStep, data, loading, goToStep, updateData, completeOnboarding } =
     useOnboardingState();
   const [stepValid, setStepValid] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>();
 
   const handleValidChange = useCallback((valid: boolean) => {
     setStepValid(valid);
@@ -21,6 +23,20 @@ export function OnboardingApp() {
       goToStep(currentStep + 1);
     }
   }, [currentStep, goToStep]);
+
+  const handleComplete = useCallback(async () => {
+    setSaving(true);
+    setError(undefined);
+    try {
+      await completeOnboarding();
+      // Try to open popup, then close this tab
+      chrome.runtime.sendMessage({ type: "OPEN_POPUP" });
+      window.close();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save settings");
+      setSaving(false);
+    }
+  }, [completeOnboarding]);
 
   const handleBack = useCallback(() => {
     if (currentStep > 0) {
@@ -40,8 +56,7 @@ export function OnboardingApp() {
   return (
     <div className="onboarding-container">
       <header className="onboarding-header">
-        <h1>2Vault</h1>
-        <span className="onboarding-subtitle">Setup</span>
+        <h1>2Vault Onboarding</h1>
       </header>
 
       <div className="progress-steps">
@@ -72,27 +87,30 @@ export function OnboardingApp() {
           />
         )}
         {currentStep === 2 && (
-          <CompletionStep data={data} onComplete={completeOnboarding} />
+          <CompletionStep data={data} />
         )}
       </main>
 
-      {currentStep < 2 && (
-        <nav className="onboarding-nav">
-          <button
-            className="btn btn-secondary"
-            onClick={handleBack}
-            disabled={currentStep === 0}
-          >
-            Back
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleNext}
-            disabled={!stepValid}
-          >
-            Next
-          </button>
-        </nav>
+      <nav className="onboarding-nav">
+        <button
+          className="btn btn-secondary"
+          onClick={handleBack}
+          disabled={currentStep === 0 || saving}
+        >
+          Back
+        </button>
+        <button
+          className="btn btn-primary"
+          onClick={currentStep === 2 ? handleComplete : handleNext}
+          disabled={(currentStep < 2 && !stepValid) || saving}
+        >
+          {currentStep === 2 && saving ? "Saving..." : "Next"}
+        </button>
+      </nav>
+      {error && (
+        <div className="error-guidance" style={{ marginTop: "1rem" }}>
+          <p>{error}</p>
+        </div>
       )}
     </div>
   );

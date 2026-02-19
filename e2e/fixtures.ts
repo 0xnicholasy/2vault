@@ -48,14 +48,34 @@ export const test = base.extend<{
     // URL format: chrome-extension://<id>/service-worker-loader.js
     const id = swUrl.split("/")[2];
     if (!id) throw new Error("Could not extract extension ID from service worker URL");
+
+    // The extension's onInstalled handler opens an onboarding tab on first install.
+    // Close it so it doesn't interfere with tests.
+    await new Promise((r) => setTimeout(r, 500));
+    for (const p of context.pages()) {
+      if (p.url().includes("onboarding")) {
+        await p.close();
+      }
+    }
+
+    // Mark onboarding as complete so the popup doesn't call window.close()
+    // to redirect first-time users to the onboarding wizard.
+    // Use the service worker context which has access to chrome.storage.
+    await serviceWorker.evaluate(() => chrome.storage.sync.set({ onboardingComplete: true }));
+
     await use(id);
   },
 
   popupPage: async ({ context, extensionId }, use) => {
     const page = await context.newPage();
-    await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+    const popupUrl = `chrome-extension://${extensionId}/src/popup/popup.html`;
+
+    await page.goto(popupUrl, {
+      waitUntil: "domcontentloaded",
+    });
+
     // Wait for React to mount
-    await page.waitForSelector(".app");
+    await page.waitForSelector(".app", { timeout: 10_000 });
     await use(page);
   },
 });
@@ -113,6 +133,9 @@ export async function clearStorage(page: Page): Promise<void> {
   await page.evaluate(async () => {
     await chrome.storage.sync.clear();
     await chrome.storage.local.clear();
+    // Re-set onboarding flag so popup doesn't call window.close()
+    // on reload (isFirstTimeUser() would return true otherwise)
+    await chrome.storage.sync.set({ onboardingComplete: true });
   });
 }
 
@@ -124,7 +147,9 @@ export async function openPopup(
   extensionId: string
 ): Promise<Page> {
   const page = await context.newPage();
-  await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-  await page.waitForSelector(".app");
+  await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForSelector(".app", { timeout: 10_000 });
   return page;
 }

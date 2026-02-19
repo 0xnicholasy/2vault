@@ -39,6 +39,12 @@ const DELETED_CONTENT_PATTERNS = [
   "content not available",
 ];
 
+const ERROR_PAGE_PATTERNS = [
+  "something went wrong",
+  "this post is from a suspended account",
+  "rate limit",
+];
+
 const MIN_WORD_COUNT = 10;
 
 function matchesPattern(text: string, patterns: string[]): string | null {
@@ -107,6 +113,18 @@ export function assessContentQuality(content: ExtractedContent): ContentQuality 
         isLowQuality: true,
         reason: "deleted-content",
         detail: `Detected deleted content: "${deletedMatch}"`,
+      };
+    }
+  }
+
+  // 6. Error pages (only for social media platforms)
+  if (isSocialPlatform(content.platform)) {
+    const errorPageMatch = matchesPattern(text, ERROR_PAGE_PATTERNS);
+    if (errorPageMatch) {
+      return {
+        isLowQuality: true,
+        reason: "error-page",
+        detail: `Detected error page: "${errorPageMatch}"`,
       };
     }
   }

@@ -104,6 +104,7 @@ test.describe("Status Tab", () => {
     // Click the failed row to expand
     await page.click(".error-row-expandable");
     await expect(page.locator(".error-expanded-details")).toBeVisible();
+    // New error display shows category label "API Error" and technical details in .error-message
     await expect(page.locator(".error-message")).toContainText("LLM call timed out");
 
     // Click again to collapse
@@ -144,8 +145,8 @@ test.describe("Status Tab", () => {
       vaultApiKey: "test-vault-key-12345",
     });
     const history: ProcessingResult[] = [
-      { url: "https://example.com/1", status: "failed", error: "Error 1" },
-      { url: "https://example.com/2", status: "failed", error: "Error 2" },
+      { url: "https://example.com/1", status: "failed", error: "Error 1", errorCategory: "network" },
+      { url: "https://example.com/2", status: "failed", error: "Error 2", errorCategory: "timeout" },
     ];
     await seedLocalStorage(page, { processingHistory: history });
     await page.reload();
@@ -164,7 +165,7 @@ test.describe("Status Tab", () => {
     });
     const history: ProcessingResult[] = [
       { url: "https://example.com/1", status: "success", folder: "Inbox" },
-      { url: "https://example.com/2", status: "failed", error: "Error" },
+      { url: "https://example.com/2", status: "failed", error: "Error", errorCategory: "llm" },
     ];
     await seedLocalStorage(page, { processingHistory: history });
     await page.reload();
@@ -229,5 +230,209 @@ test.describe("Status Tab", () => {
     await page.click('button[role="tab"]:has-text("Status")');
 
     await expect(page.locator('.filter-btn:has-text("Skipped")')).not.toBeVisible();
+  });
+
+  test("network error shows correct category badge and retry button", async ({ popupPage: page }) => {
+    await seedSettings(page, {
+      apiKey: "sk-or-test-key-1234567890",
+      vaultApiKey: "test-vault-key-12345",
+    });
+    const history: ProcessingResult[] = [
+      {
+        url: "https://example.com/network-fail",
+        status: "failed",
+        error: "Failed to fetch",
+        errorCategory: "network",
+      },
+    ];
+    await seedLocalStorage(page, { processingHistory: history });
+    await page.reload();
+    await page.waitForSelector(".app");
+    await page.click('button[role="tab"]:has-text("Status")');
+
+    // Expand error row
+    await page.click(".error-row-expandable");
+    await expect(page.locator(".error-expanded-details")).toBeVisible();
+
+    // Verify category-specific elements
+    await expect(page.locator('button:has-text("Retry")')).toBeVisible();
+    await expect(page.locator('button:has-text("Copy URL")')).toBeVisible();
+  });
+
+  test("login-required error shows no retry button", async ({ popupPage: page }) => {
+    await seedSettings(page, {
+      apiKey: "sk-or-test-key-1234567890",
+      vaultApiKey: "test-vault-key-12345",
+    });
+    const history: ProcessingResult[] = [
+      {
+        url: "https://example.com/login-wall",
+        status: "failed",
+        error: "Content requires authentication",
+        errorCategory: "login-required",
+      },
+    ];
+    await seedLocalStorage(page, { processingHistory: history });
+    await page.reload();
+    await page.waitForSelector(".app");
+    await page.click('button[role="tab"]:has-text("Status")');
+
+    // Expand error row
+    await page.click(".error-row-expandable");
+    await expect(page.locator(".error-expanded-details")).toBeVisible();
+
+    // Login-required errors should NOT show retry button (not retryable)
+    await expect(page.locator('button:has-text("Retry")')).not.toBeVisible();
+    await expect(page.locator('button:has-text("Open")')).toBeVisible();
+    await expect(page.locator('button:has-text("Copy URL")')).toBeVisible();
+  });
+
+  test("vault error shows settings button", async ({ popupPage: page }) => {
+    await seedSettings(page, {
+      apiKey: "sk-or-test-key-1234567890",
+      vaultApiKey: "test-vault-key-12345",
+    });
+    const history: ProcessingResult[] = [
+      {
+        url: "https://example.com/vault-fail",
+        status: "failed",
+        error: "Connection refused",
+        errorCategory: "vault",
+      },
+    ];
+    await seedLocalStorage(page, { processingHistory: history });
+    await page.reload();
+    await page.waitForSelector(".app");
+    await page.click('button[role="tab"]:has-text("Status")');
+
+    // Expand error row
+    await page.click(".error-row-expandable");
+    await expect(page.locator(".error-expanded-details")).toBeVisible();
+
+    // Vault errors should show Settings button
+    await expect(page.locator('button:has-text("Settings")')).toBeVisible();
+    await expect(page.locator('button:has-text("Retry")')).toBeVisible();
+  });
+
+  test("timeout error shows retry button", async ({ popupPage: page }) => {
+    await seedSettings(page, {
+      apiKey: "sk-or-test-key-1234567890",
+      vaultApiKey: "test-vault-key-12345",
+    });
+    const history: ProcessingResult[] = [
+      {
+        url: "https://example.com/timeout",
+        status: "timeout",
+        error: "Timed out after 30 seconds",
+        errorCategory: "timeout",
+      },
+    ];
+    await seedLocalStorage(page, { processingHistory: history });
+    await page.reload();
+    await page.waitForSelector(".app");
+    await page.click('button[role="tab"]:has-text("Status")');
+
+    // Expand error row
+    await page.click(".error-row-expandable");
+    await expect(page.locator(".error-expanded-details")).toBeVisible();
+
+    // Timeout errors are retryable
+    await expect(page.locator('button:has-text("Retry")')).toBeVisible();
+  });
+
+  test("multiple different error categories display correctly", async ({ popupPage: page }) => {
+    await seedSettings(page, {
+      apiKey: "sk-or-test-key-1234567890",
+      vaultApiKey: "test-vault-key-12345",
+    });
+    const history: ProcessingResult[] = [
+      {
+        url: "https://example.com/network",
+        status: "failed",
+        error: "Network error",
+        errorCategory: "network",
+      },
+      {
+        url: "https://example.com/llm",
+        status: "failed",
+        error: "API error",
+        errorCategory: "llm",
+      },
+      {
+        url: "https://example.com/vault",
+        status: "failed",
+        error: "Vault error",
+        errorCategory: "vault",
+      },
+    ];
+    await seedLocalStorage(page, { processingHistory: history });
+    await page.reload();
+    await page.waitForSelector(".app");
+    await page.click('button[role="tab"]:has-text("Status")');
+
+    // All three errors should be visible in table
+    const rows = page.locator(".results-table tbody tr");
+    await expect(rows).toHaveCount(3);
+
+    // Filter to failures only
+    await page.click('.filter-btn:has-text("Failures")');
+    await expect(rows).toHaveCount(3);
+  });
+
+  test("skipped row with skipReason is expandable and shows reason", async ({ popupPage: page }) => {
+    await seedSettings(page, {
+      apiKey: "sk-or-test-key-1234567890",
+      vaultApiKey: "test-vault-key-12345",
+    });
+    const history: ProcessingResult[] = [
+      {
+        url: "https://example.com/duplicate",
+        status: "skipped",
+        skipReason: "Duplicate - note already exists in vault",
+      },
+    ];
+    await seedLocalStorage(page, { processingHistory: history });
+    await page.reload();
+    await page.waitForSelector(".app");
+    await page.click('button[role="tab"]:has-text("Status")');
+
+    // Verify row is expandable
+    const row = page.locator(".results-table tbody tr").first();
+    await expect(row).toHaveClass(/error-row-expandable/);
+
+    // Expand the row
+    await row.click();
+    await expect(page.locator(".skip-expanded-details")).toBeVisible();
+
+    // Verify skip reason is displayed
+    await expect(page.locator(".skip-reason-text")).toContainText("Duplicate - note already exists in vault");
+
+    // Verify Remove button is available
+    await expect(page.locator('.skip-expanded-details button:has-text("Remove")')).toBeVisible();
+  });
+
+  test("skipped row without skipReason is not expandable", async ({ popupPage: page }) => {
+    await seedSettings(page, {
+      apiKey: "sk-or-test-key-1234567890",
+      vaultApiKey: "test-vault-key-12345",
+    });
+    const history: ProcessingResult[] = [
+      {
+        url: "https://example.com/skipped",
+        status: "skipped",
+        // No skipReason provided
+      },
+    ];
+    await seedLocalStorage(page, { processingHistory: history });
+    await page.reload();
+    await page.waitForSelector(".app");
+    await page.click('button[role="tab"]:has-text("Status")');
+
+    // Verify row is NOT expandable (no error-row-expandable class)
+    const row = page.locator(".results-table tbody tr").first();
+    await expect(row).not.toHaveClass(/error-row-expandable/);
+
+    // Verify no chevron icon appears
+    await expect(page.locator(".error-toggle-icon")).not.toBeVisible();
   });
 });

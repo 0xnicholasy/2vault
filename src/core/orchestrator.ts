@@ -17,6 +17,11 @@ import {
   generateFilename,
   formatTagHubNote,
 } from "@/core/note-formatter";
+import {
+  categorizeError,
+  categorizeExtractionError,
+  buildErrorMetadata,
+} from "@/core/error-categorizer";
 
 export type ProgressCallback = (url: string, status: string) => void;
 
@@ -26,16 +31,7 @@ export function createDefaultProvider(config: Config): LLMProvider {
 
 export type ExtractFn = (url: string) => Promise<ExtractedContent>;
 
-function categorizeError(err: unknown): ErrorCategory {
-  if (err instanceof VaultClientError) return "vault";
-  if (err instanceof LLMProcessingError) return "llm";
-  if (
-    err instanceof TypeError &&
-    (err.message.includes("fetch") || err.message.includes("network"))
-  )
-    return "network";
-  return "unknown";
-}
+// Note: categorizeError is now imported from error-categorizer.ts
 
 /** Tracking params to strip during URL normalization */
 const TRACKING_PARAMS = new Set([
@@ -154,7 +150,7 @@ async function processSingleUrl(
     // Duplicate check
     onProgress?.(url, "checking");
     if (isCancelled?.()) {
-      return { url, status: "failed", error: "Cancelled" };
+      return { url, status: "cancelled" };
     }
 
     try {
@@ -173,18 +169,25 @@ async function processSingleUrl(
 
     // Extract content
     if (isCancelled?.()) {
-      return { url, status: "failed", error: "Cancelled" };
+      return { url, status: "cancelled" };
     }
     onProgress?.(url, "extracting");
     const extracted = await extract(url);
 
     if (extracted.status === "failed") {
-      onProgress?.(url, "failed");
+      const errorMessage = extracted.error ?? "Extraction failed";
+      const category = categorizeExtractionError(errorMessage);
+      const isTimeout = category === "timeout";
+      const status = isTimeout ? "timeout" : "failed";
+      const metadata = buildErrorMetadata(category, errorMessage);
+
+      onProgress?.(url, isTimeout ? "timeout" : "failed");
       return {
         url,
-        status: "failed",
-        error: extracted.error ?? "Extraction failed",
-        errorCategory: "extraction",
+        status,
+        error: errorMessage,
+        errorCategory: category,
+        errorMetadata: metadata,
       };
     }
 
@@ -193,7 +196,7 @@ async function processSingleUrl(
 
     // LLM processing
     if (isCancelled?.()) {
-      return { url, status: "failed", error: "Cancelled" };
+      return { url, status: "cancelled" };
     }
     onProgress?.(url, "processing");
     let processed;
@@ -202,18 +205,22 @@ async function processSingleUrl(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unknown error";
+      const category = categorizeError(err);
+      const metadata = buildErrorMetadata(category, message);
+
       onProgress?.(url, "failed");
       return {
         url,
         status: "failed",
         error: message,
-        errorCategory: categorizeError(err),
+        errorCategory: category,
+        errorMetadata: metadata,
       };
     }
 
     // Create note in vault
     if (isCancelled?.()) {
-      return { url, status: "failed", error: "Cancelled" };
+      return { url, status: "cancelled" };
     }
     onProgress?.(url, "creating");
     const formatted = formatNote(processed);
@@ -225,12 +232,16 @@ async function processSingleUrl(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unknown error";
+      const category = categorizeError(err);
+      const metadata = buildErrorMetadata(category, message);
+
       onProgress?.(url, "failed");
       return {
         url,
         status: "failed",
         error: message,
-        errorCategory: categorizeError(err),
+        errorCategory: category,
+        errorMetadata: metadata,
       };
     }
 
@@ -243,8 +254,9 @@ async function processSingleUrl(
           // Tag hub already handled by another URL in this batch - just append
           try {
             await client.appendToNote(`Tags/${tag}.md`, `\n- [[${noteTitle}]]`);
-          } catch {
-            // Non-critical
+          } catch (err) {
+            // Non-critical - log for debugging but continue processing
+            console.warn(`[2Vault] Hub note append failed for tag "${tag}":`, err);
           }
           continue;
         }
@@ -259,8 +271,9 @@ async function processSingleUrl(
           createdHubTags.add(tag);
         }
       }
-    } catch {
-      // Hub note failures are non-critical - log silently
+    } catch (err) {
+      // Hub note failures are non-critical - log but continue
+      console.warn("[2Vault] Hub note processing failed:", err);
     }
 
     const finalStatus = contentQuality.isLowQuality ? "review" : "success";
@@ -275,12 +288,16 @@ async function processSingleUrl(
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Unknown error";
+    const category = categorizeError(err);
+    const metadata = buildErrorMetadata(category, message);
+
     onProgress?.(url, "failed");
     return {
       url,
       status: "failed",
       error: message,
-      errorCategory: categorizeError(err),
+      errorCategory: category,
+      errorMetadata: metadata,
     };
   }
 }

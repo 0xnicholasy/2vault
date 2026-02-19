@@ -51,7 +51,7 @@ beforeEach(() => {
   }
 
   mockTestConnection.mockReset();
-  mockTestConnection.mockResolvedValue(true);
+  mockTestConnection.mockResolvedValue({ ok: true, authenticated: true });
   mockTestOpenRouter.mockReset();
   mockTestOpenRouter.mockResolvedValue(true);
 
@@ -63,16 +63,17 @@ describe("Settings", () => {
     render(<Settings />);
 
     expect(screen.getByLabelText("OpenRouter API Key")).toBeInTheDocument();
-    expect(screen.getByLabelText("Obsidian Vault URL")).toBeInTheDocument();
+    expect(screen.getByText("Obsidian Vault URL")).toBeInTheDocument(); // Now just a label
+    expect(screen.getByText("http://localhost:27123")).toBeInTheDocument(); // Fixed URL display
     expect(screen.getByLabelText("Obsidian Vault API Key")).toBeInTheDocument();
-    expect(screen.getByLabelText("Default Folder")).toBeInTheDocument();
+    expect(screen.getByLabelText("Vault Name")).toBeInTheDocument();
   });
 
   it("loads existing config on mount", async () => {
     mockSyncStore["apiKey"] = "sk-or-test-abcdefghijklmnop";
-    mockSyncStore["vaultUrl"] = "https://localhost:27124";
+    mockSyncStore["vaultUrl"] = "https://localhost:27124"; // Will be overridden to HTTP
     mockSyncStore["vaultApiKey"] = "vault-key-123";
-    mockSyncStore["defaultFolder"] = "Notes";
+    mockSyncStore["vaultName"] = "MyVault";
 
     render(<Settings />);
 
@@ -81,11 +82,9 @@ describe("Settings", () => {
         "sk-or-test-abcdefghijklmnop"
       );
     });
-    // Vault URL is now a select dropdown; HTTPS preset should be selected
-    expect(screen.getByLabelText("Obsidian Vault URL")).toHaveValue(
-      "https://localhost:27124"
-    );
-    expect(screen.getByLabelText("Default Folder")).toHaveValue("Notes");
+    // Vault URL is now fixed to HTTP
+    expect(screen.getByText("http://localhost:27123")).toBeInTheDocument();
+    expect(screen.getByLabelText("Vault Name")).toHaveValue("MyVault");
   });
 
   it("saves config via setSyncStorage on submit", async () => {
@@ -142,7 +141,7 @@ describe("Settings", () => {
 
   it("shows separate success statuses for both connections", async () => {
     mockTestOpenRouter.mockResolvedValue(true);
-    mockTestConnection.mockResolvedValue(true);
+    mockTestConnection.mockResolvedValue({ ok: true, authenticated: true });
     mockSyncStore["apiKey"] = "sk-or-test-abcdefghijklmnop";
     mockSyncStore["vaultApiKey"] = "existing-key";
     render(<Settings />);
@@ -163,8 +162,9 @@ describe("Settings", () => {
 
   it("shows individual failure when only vault fails", async () => {
     mockTestOpenRouter.mockResolvedValue(true);
-    mockTestConnection.mockResolvedValue(false);
+    mockTestConnection.mockResolvedValue({ ok: true, authenticated: false });
     mockSyncStore["apiKey"] = "sk-or-test-abcdefghijklmnop";
+    mockSyncStore["vaultUrl"] = "https://localhost:27124";
     mockSyncStore["vaultApiKey"] = "bad-key";
     render(<Settings />);
 
@@ -181,6 +181,27 @@ describe("Settings", () => {
       expect(screen.getByText("Obsidian Vault:")).toBeInTheDocument();
       expect(screen.getAllByText("Connected")).toHaveLength(1);
       expect(screen.getAllByText("Connection failed")).toHaveLength(1);
+    });
+  });
+
+  it("shows failure when vault authentication fails", async () => {
+    mockTestOpenRouter.mockResolvedValue(true);
+    mockTestConnection.mockResolvedValue({ ok: false, error: "API key authentication failed" });
+    mockSyncStore["apiKey"] = "sk-or-test-abcdefghijklmnop";
+    mockSyncStore["vaultApiKey"] = "wrong-key";
+    render(<Settings />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("OpenRouter API Key")).toHaveValue(
+        "sk-or-test-abcdefghijklmnop"
+      );
+    });
+
+    fireEvent.click(screen.getByText("Test Connections"));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Connected")).toHaveLength(1); // OpenRouter succeeds
+      expect(screen.getAllByText("Connection failed")).toHaveLength(1); // Vault fails
     });
   });
 
@@ -277,47 +298,5 @@ describe("Settings", () => {
     });
   });
 
-  // -- Vault URL dropdown tests --
-
-  it("renders vault URL dropdown with presets", () => {
-    render(<Settings />);
-
-    const select = screen.getByLabelText("Obsidian Vault URL");
-    expect(select.tagName).toBe("SELECT");
-    expect(screen.getByText("HTTP (localhost:27123)")).toBeInTheDocument();
-    expect(screen.getByText("HTTPS (localhost:27124)")).toBeInTheDocument();
-    expect(screen.getByText("Custom...")).toBeInTheDocument();
-  });
-
-  it("selects HTTP preset by default", () => {
-    render(<Settings />);
-
-    const select = screen.getByLabelText("Obsidian Vault URL");
-    expect(select).toHaveValue("http://localhost:27123");
-  });
-
-  it("shows custom input when Custom is selected", async () => {
-    render(<Settings />);
-
-    const select = screen.getByLabelText("Obsidian Vault URL");
-    fireEvent.change(select, { target: { value: "custom" } });
-
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/your-obsidian-url/)).toBeInTheDocument();
-    });
-  });
-
-  it("defaults to Custom when stored URL does not match a preset", async () => {
-    mockSyncStore["vaultUrl"] = "https://my-server:9999";
-    render(<Settings />);
-
-    await waitFor(() => {
-      const select = screen.getByLabelText("Obsidian Vault URL");
-      expect(select).toHaveValue("custom");
-    });
-
-    expect(screen.getByPlaceholderText(/your-obsidian-url/)).toHaveValue(
-      "https://my-server:9999"
-    );
-  });
+  // Vault URL dropdown tests removed - now using fixed HTTP URL only
 });

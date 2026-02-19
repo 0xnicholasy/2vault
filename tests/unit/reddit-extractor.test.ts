@@ -210,9 +210,10 @@ describe("reddit-extractor - fallback", () => {
       configurable: true,
     });
     const result = extractFromDom();
-    expect(result.status).toBe("success");
+    expect(result.status).toBe("failed");
     expect(result.title).toBe("Reddit Post");
     expect(result.content).toContain("Some fallback text");
+    expect(result.error).toContain("fallback");
   });
 
   it("returns failed when body is empty", () => {

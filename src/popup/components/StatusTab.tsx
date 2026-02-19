@@ -66,6 +66,28 @@ export function StatusTab({ processingState, onProcess, onSwitchTab }: StatusTab
     clearProcessingHistory().then(() => setHistory([]));
   }, []);
 
+  const handleRemoveResult = useCallback((url: string) => {
+    setHistory((prev) => prev.filter((r) => r.url !== url));
+    // Also update storage
+    getProcessingHistory().then((history) => {
+      const updated = history.filter((r) => r.url !== url);
+      chrome.storage.local.set({ processingHistory: updated });
+    });
+  }, []);
+
+  const handleSkipResult = useCallback((url: string) => {
+    setHistory((prev) =>
+      prev.map((r) => (r.url === url ? { ...r, status: "skipped" as const } : r))
+    );
+    // Also update storage
+    getProcessingHistory().then((history) => {
+      const updated = history.map((r) =>
+        r.url === url ? { ...r, status: "skipped" as const } : r
+      );
+      chrome.storage.local.set({ processingHistory: updated });
+    });
+  }, []);
+
   if (!configValid) {
     return (
       <div className="config-guard-inline">
@@ -92,6 +114,9 @@ export function StatusTab({ processingState, onProcess, onSwitchTab }: StatusTab
         onRetry={handleRetry}
         onProcessMore={handleProcessMore}
         onClearHistory={handleClearHistory}
+        onSwitchTab={onSwitchTab}
+        onRemoveResult={handleRemoveResult}
+        onSkipResult={handleSkipResult}
       />
     </div>
   );

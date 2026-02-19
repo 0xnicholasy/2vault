@@ -103,9 +103,8 @@ describe("getConfig", () => {
     expect(config).toEqual({
       apiKey: "",
       llmProvider: "openrouter",
-      vaultUrl: "https://localhost:27124",
+      vaultUrl: "http://localhost:27123",
       vaultApiKey: "",
-      defaultFolder: "Inbox",
       vaultName: "",
       vaultOrganization: "para",
       tagGroups: [],
@@ -118,7 +117,6 @@ describe("getConfig", () => {
     syncStore["llmProvider"] = "openrouter";
     syncStore["vaultUrl"] = "http://localhost:27123";
     syncStore["vaultApiKey"] = "vault-key-abc";
-    syncStore["defaultFolder"] = "Notes";
     syncStore["vaultName"] = "My Vault";
 
     const config = await getConfig();
@@ -126,21 +124,19 @@ describe("getConfig", () => {
     expect(config.apiKey).toBe("sk-or-real");
     expect(config.vaultUrl).toBe("http://localhost:27123");
     expect(config.vaultApiKey).toBe("vault-key-abc");
-    expect(config.defaultFolder).toBe("Notes");
     expect(config.vaultName).toBe("My Vault");
     expect(config.llmProvider).toBe("openrouter");
   });
 
   it("applies defaults for partially configured storage", async () => {
     syncStore["apiKey"] = "sk-or-partial";
-    // vaultUrl, vaultApiKey, defaultFolder, vaultName are NOT set
+    // vaultUrl, vaultApiKey, vaultName are NOT set
 
     const config = await getConfig();
 
     expect(config.apiKey).toBe("sk-or-partial");
-    expect(config.vaultUrl).toBe("https://localhost:27124");
+    expect(config.vaultUrl).toBe("http://localhost:27123");
     expect(config.vaultApiKey).toBe("");
-    expect(config.defaultFolder).toBe("Inbox");
     expect(config.vaultName).toBe("");
   });
 });

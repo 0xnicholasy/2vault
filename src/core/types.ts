@@ -9,7 +9,7 @@ export interface ExtractedContent {
   wordCount: number;
   type: "article" | "social-media";
   platform: Platform;
-  status: "success" | "failed";
+  status: "success" | "failed" | "review"; // review = partial extraction, needs user verification
   error?: string;
 }
 
@@ -47,14 +47,39 @@ export interface ProcessedNote {
   source: ExtractedContent;
 }
 
-export type ErrorCategory = "network" | "extraction" | "llm" | "vault" | "unknown";
+/** Specific error categories for better UX organization */
+export type ErrorCategory =
+  | "network"        // Connection timeout, DNS, SSL, offline
+  | "login-required" // 401/403, auth wall, requires login
+  | "bot-protection" // Cloudflare, reCAPTCHA, anti-bot detected
+  | "page-not-found" // 404, 410, deleted content
+  | "extraction"     // Could not parse content (not login/bot/404)
+  | "llm"            // AI service errors, API key issues, 500+
+  | "vault"          // Obsidian connection failed
+  | "timeout"        // Processing timeout (>30s)
+  | "unknown";       // Catch-all for unexpected errors
+
+/** Suggested action for each error type */
+export type SuggestedAction = "retry" | "open" | "skip" | "settings";
+
+/** Comprehensive error metadata for user-facing display */
+export interface ErrorMetadata {
+  category: ErrorCategory;
+  userMessage: string;        // Plain-English explanation
+  technicalDetails: string;   // Error message, status codes, etc.
+  suggestedAction: SuggestedAction;
+  isRetryable: boolean;
+  retryCount?: number;
+  timestamp: string;          // ISO timestamp
+}
 
 export type ContentQualityReason =
   | "login-wall"
   | "bot-protection"
   | "soft-404"
   | "deleted-content"
-  | "insufficient-content";
+  | "insufficient-content"
+  | "error-page";
 
 export interface ContentQuality {
   isLowQuality: boolean;
@@ -64,11 +89,12 @@ export interface ContentQuality {
 
 export interface ProcessingResult {
   url: string;
-  status: "success" | "failed" | "skipped" | "review";
+  status: "success" | "failed" | "skipped" | "review" | "timeout" | "cancelled";
   note?: ProcessedNote;
   folder?: string;
   error?: string;
   errorCategory?: ErrorCategory;
+  errorMetadata?: ErrorMetadata; // New: comprehensive error context
   skipReason?: string;
   contentQuality?: ContentQuality;
 }
@@ -90,7 +116,6 @@ export interface Config {
   llmProvider: "openrouter";
   vaultUrl: string;
   vaultApiKey: string;
-  defaultFolder: string;
   vaultName: string;
   vaultOrganization: VaultOrganization;
   tagGroups: TagGroup[];

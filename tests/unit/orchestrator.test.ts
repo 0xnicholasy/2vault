@@ -57,17 +57,18 @@ vi.mock("@/core/note-formatter", () => ({
   formatTagHubNote: mockFormatTagHubNote,
 }));
 
-import { processUrls, normalizeUrl, type ProgressCallback, type ExtractFn } from "@/core/orchestrator";
+import { processUrls, normalizeUrl, checkDuplicate, type ProgressCallback, type ExtractFn } from "@/core/orchestrator";
+import { VaultClient } from "@/core/vault-client";
 
 const TEST_CONFIG: Config = {
   apiKey: "test-api-key",
   llmProvider: "openrouter",
   vaultUrl: "https://localhost:27124",
   vaultApiKey: "test-vault-key",
-  defaultFolder: "Inbox",
   vaultName: "TestVault",
   vaultOrganization: "custom",
   tagGroups: [],
+  summaryDetailLevel: "standard",
 };
 
 const MOCK_VAULT_CONTEXT: VaultContext = {
@@ -408,8 +409,10 @@ describe("processUrls - custom extractFn", () => {
       failingExtract
     );
 
-    expect(results[0]!.status).toBe("failed");
+    // "timed out" in error message categorizes as timeout
+    expect(results[0]!.status).toBe("timeout");
     expect(results[0]!.error).toBe("DOM extraction timed out");
+    expect(results[0]!.errorCategory).toBe("timeout");
   });
 
   it("processes mixed URLs with custom extractFn", async () => {
@@ -754,7 +757,7 @@ describe("processUrls - cancellation", () => {
 
     expect(results).toHaveLength(2);
     // At least one should be cancelled
-    const cancelledResults = results.filter((r) => r.error === "Cancelled");
+    const cancelledResults = results.filter((r) => r.status === "cancelled");
     expect(cancelledResults.length).toBeGreaterThanOrEqual(1);
   });
 });
@@ -873,5 +876,323 @@ describe("processUrls - parallel processing", () => {
     expect(results[0]!.note?.title).toBe("A");
     expect(results[1]!.note?.title).toBe("B");
     expect(results[2]!.note?.title).toBe("C");
+  });
+});
+
+// -- Timeout status (Phase 2.10) ----------------------------------------------
+
+describe("processUrls - timeout status", () => {
+  it("extraction error starting with 'Timed out after' returns status 'timeout'", async () => {
+    mockFetchAndExtract.mockResolvedValue(
+      createExtracted({
+        status: "failed",
+        error: "Timed out after 30s waiting for response",
+      })
+    );
+
+    const results = await processUrls(
+      ["https://example.com/slow"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.status).toBe("timeout");
+  });
+
+  it("timeout status has errorCategory 'timeout'", async () => {
+    mockFetchAndExtract.mockResolvedValue(
+      createExtracted({
+        status: "failed",
+        error: "Timed out after 60s waiting for response",
+      })
+    );
+
+    const results = await processUrls(
+      ["https://example.com/slow"],
+      TEST_CONFIG,
+      createMockProvider()
+    );
+
+    expect(results[0]!.errorCategory).toBe("timeout");
+  });
+
+  it("progress callback reports 'timeout' for timed-out URLs", async () => {
+    mockFetchAndExtract.mockResolvedValue(
+      createExtracted({
+        status: "failed",
+        error: "Timed out after 45s waiting for response",
+      })
+    );
+
+    const statuses: string[] = [];
+    const onProgress: ProgressCallback = (_url, status) => {
+      statuses.push(status);
+    };
+
+    await processUrls(
+      ["https://example.com/slow"],
+      TEST_CONFIG,
+      createMockProvider(),
+      onProgress
+    );
+
+    expect(statuses).toContain("timeout");
+    expect(statuses).not.toContain("failed");
+    expect(statuses).not.toContain("done");
+  });
+
+  it("timeout results are separate from failed results in final output", async () => {
+    const urls = ["https://example.com/slow", "https://example.com/broken"];
+
+    mockFetchAndExtract
+      .mockResolvedValueOnce(
+        createExtracted({
+          url: urls[0],
+          status: "failed",
+          error: "Timed out after 30s waiting for response",
+        })
+      )
+      .mockResolvedValueOnce(
+        createExtracted({
+          url: urls[1],
+          status: "failed",
+          error: "HTTP 404 Not Found",
+        })
+      );
+
+    const results = await processUrls(urls, TEST_CONFIG, createMockProvider());
+
+    expect(results).toHaveLength(2);
+    expect(results[0]!.status).toBe("timeout");
+    expect(results[0]!.errorCategory).toBe("timeout");
+    expect(results[1]!.status).toBe("failed");
+    // "HTTP 404" categorizes as page-not-found
+    expect(results[1]!.errorCategory).toBe("page-not-found");
+  });
+});
+
+// -- checkDuplicate (direct unit tests) ---------------------------------------
+
+describe("checkDuplicate", () => {
+  it("returns true when vault note has matching source URL", async () => {
+    const url = "https://example.com/article";
+    mockSearchNotes.mockResolvedValue([{ filename: "Inbox/article.md", score: 1.0 }]);
+    mockReadNote.mockResolvedValue(
+      `---\nsource: ${url}\ndate_saved: 2026-01-01\n---\n# Article`
+    );
+
+    const client = new VaultClient("https://localhost:27124", "test-key");
+    const result = await checkDuplicate(url, client);
+
+    expect(result).toBe(true);
+  });
+
+  it("returns false when no notes match", async () => {
+    mockSearchNotes.mockResolvedValue([]);
+
+    const client = new VaultClient("https://localhost:27124", "test-key");
+    const result = await checkDuplicate("https://example.com/new", client);
+
+    expect(result).toBe(false);
+  });
+
+  it("returns false when note has no frontmatter", async () => {
+    mockSearchNotes.mockResolvedValue([{ filename: "Inbox/no-frontmatter.md", score: 0.9 }]);
+    mockReadNote.mockResolvedValue("# Note without frontmatter\n\nJust content here.");
+
+    const client = new VaultClient("https://localhost:27124", "test-key");
+    const result = await checkDuplicate("https://example.com/article", client);
+
+    expect(result).toBe(false);
+  });
+
+  it("returns false when frontmatter has no source field", async () => {
+    mockSearchNotes.mockResolvedValue([{ filename: "Inbox/note.md", score: 0.9 }]);
+    mockReadNote.mockResolvedValue(
+      `---\ntitle: Some Note\ndate_saved: 2026-01-01\n---\n# Note`
+    );
+
+    const client = new VaultClient("https://localhost:27124", "test-key");
+    const result = await checkDuplicate("https://example.com/article", client);
+
+    expect(result).toBe(false);
+  });
+
+  it("normalizes both stored and incoming URLs before comparison", async () => {
+    const storedUrl = "https://www.example.com/article?utm_source=twitter";
+    const incomingUrl = "https://example.com/article";
+
+    mockSearchNotes.mockResolvedValue([{ filename: "Inbox/article.md", score: 1.0 }]);
+    mockReadNote.mockResolvedValue(
+      `---\nsource: ${storedUrl}\ndate_saved: 2026-01-01\n---\n# Article`
+    );
+
+    const client = new VaultClient("https://localhost:27124", "test-key");
+    const result = await checkDuplicate(incomingUrl, client);
+
+    expect(result).toBe(true);
+  });
+
+  it("handles readNote throwing for individual notes and continues checking others", async () => {
+    mockSearchNotes.mockResolvedValue([
+      { filename: "Inbox/unreadable.md", score: 1.0 },
+      { filename: "Inbox/readable.md", score: 0.9 },
+    ]);
+
+    const url = "https://example.com/article";
+    mockReadNote
+      .mockRejectedValueOnce(new Error("File not found"))
+      .mockResolvedValueOnce(
+        `---\nsource: ${url}\ndate_saved: 2026-01-01\n---\n# Article`
+      );
+
+    const client = new VaultClient("https://localhost:27124", "test-key");
+    const result = await checkDuplicate(url, client);
+
+    expect(result).toBe(true);
+    expect(mockReadNote).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses hostname+pathname as search query", async () => {
+    mockSearchNotes.mockResolvedValue([]);
+
+    const client = new VaultClient("https://localhost:27124", "test-key");
+    await checkDuplicate("https://example.com/path/to/article?utm_source=x", client);
+
+    expect(mockSearchNotes).toHaveBeenCalledWith("example.com/path/to/article");
+  });
+
+  it("handles invalid URL gracefully and falls back to raw string as search query", async () => {
+    mockSearchNotes.mockResolvedValue([]);
+
+    const client = new VaultClient("https://localhost:27124", "test-key");
+    const result = await checkDuplicate("not-a-valid-url", client);
+
+    expect(result).toBe(false);
+    expect(mockSearchNotes).toHaveBeenCalledWith("not-a-valid-url");
+  });
+
+  it("handles source URL with surrounding quotes in YAML frontmatter", async () => {
+    const url = "https://example.com/article";
+    mockSearchNotes.mockResolvedValue([{ filename: "Inbox/article.md", score: 1.0 }]);
+    mockReadNote.mockResolvedValue(
+      `---\nsource: "${url}"\ndate_saved: 2026-01-01\n---\n# Article`
+    );
+
+    const client = new VaultClient("https://localhost:27124", "test-key");
+    const result = await checkDuplicate(url, client);
+
+    expect(result).toBe(true);
+  });
+});
+
+// -- Cancellation: granular timing --------------------------------------------
+
+describe("processUrls - cancellation granular timing", () => {
+  it("cancellation between extraction and LLM processing returns cancelled", async () => {
+    let checkCount = 0;
+    const isCancelled = () => {
+      checkCount++;
+      return checkCount === 3;
+    };
+
+    const results = await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider(),
+      undefined,
+      undefined,
+      isCancelled
+    );
+
+    expect(results[0]!.status).toBe("cancelled");
+    expect(mockFetchAndExtract).toHaveBeenCalledOnce();
+    expect(mockProcessContent).not.toHaveBeenCalled();
+  });
+
+  it("cancellation after LLM processing but before vault creation returns cancelled", async () => {
+    let checkCount = 0;
+    const isCancelled = () => {
+      checkCount++;
+      return checkCount === 4;
+    };
+
+    const results = await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider(),
+      undefined,
+      undefined,
+      isCancelled
+    );
+
+    expect(results[0]!.status).toBe("cancelled");
+    expect(mockProcessContent).toHaveBeenCalledOnce();
+    expect(mockCreateNote).not.toHaveBeenCalled();
+  });
+
+  it("cancellation does NOT affect already-completed results", async () => {
+    const isCancelled = () => false;
+
+    const results = await processUrls(
+      ["https://example.com/a"],
+      TEST_CONFIG,
+      createMockProvider(),
+      undefined,
+      undefined,
+      isCancelled
+    );
+
+    expect(results[0]!.status).toBe("success");
+    expect(results[0]!.note).toBeDefined();
+    expect(results[0]!.error).toBeUndefined();
+  });
+
+  it("cancellation with mixed states: completed URL stays success while later URLs are cancelled", async () => {
+    const urls = [
+      "https://example.com/a",
+      "https://example.com/b",
+      "https://example.com/c",
+    ];
+
+    mockFetchAndExtract
+      .mockResolvedValueOnce(createExtracted({ url: urls[0] }))
+      .mockResolvedValueOnce(createExtracted({ url: urls[1] }))
+      .mockResolvedValueOnce(createExtracted({ url: urls[2] }));
+
+    mockProcessContent
+      .mockResolvedValueOnce(createProcessed({ title: "A" }))
+      .mockResolvedValueOnce(createProcessed({ title: "B" }))
+      .mockResolvedValueOnce(createProcessed({ title: "C" }));
+
+    let cancelled = false;
+    let articleNoteCount = 0;
+    mockCreateNote.mockImplementation(async (path: string) => {
+      if (!path.startsWith("Tags/")) {
+        articleNoteCount++;
+        if (articleNoteCount === 1) {
+          cancelled = true;
+        }
+      }
+    });
+
+    const isCancelled = () => cancelled;
+
+    const results = await processUrls(
+      urls,
+      TEST_CONFIG,
+      createMockProvider(),
+      undefined,
+      undefined,
+      isCancelled
+    );
+
+    expect(results).toHaveLength(3);
+    expect(results.map((r) => r.url)).toEqual(expect.arrayContaining(urls));
+    const successCount = results.filter((r) => r.status === "success").length;
+    const cancelledCount = results.filter((r) => r.status === "cancelled").length;
+    expect(successCount).toBeGreaterThanOrEqual(1);
+    expect(cancelledCount).toBeGreaterThanOrEqual(1);
+    expect(successCount + cancelledCount).toBe(3);
   });
 });

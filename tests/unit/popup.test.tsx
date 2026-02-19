@@ -25,7 +25,7 @@ vi.stubGlobal("chrome", {
 
 vi.mock("@/core/vault-client", () => ({
   VaultClient: vi.fn().mockImplementation(() => ({
-    testConnection: vi.fn().mockResolvedValue(true),
+    testConnection: vi.fn().mockResolvedValue({ ok: true, authenticated: true }),
   })),
 }));
 

@@ -282,9 +282,10 @@ describe("twitter-extractor - fallback", () => {
       configurable: true,
     });
     const result = extractFromDom();
-    expect(result.status).toBe("success");
+    expect(result.status).toBe("failed");
     expect(result.title).toBe("X Post");
     expect(result.content).toContain("Some fallback text");
+    expect(result.error).toContain("fallback");
   });
 
   it("returns failed when body is empty", () => {
@@ -331,5 +332,97 @@ describe("twitter-extractor - edge cases", () => {
 
   it("registers chrome message listener", () => {
     expect(mockAddListener).toHaveBeenCalled();
+  });
+});
+
+// -- Error page detection (HIGH) ---------------------------------------------
+
+describe("twitter-extractor - error page detection", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("extractFromDom returns failed for 'Something went wrong' X error page", () => {
+    document.body.innerHTML = "<div>Something went wrong. Try reloading.</div>";
+    Object.defineProperty(document.body, "innerText", {
+      value: "Something went wrong. Try reloading.",
+      writable: true,
+      configurable: true,
+    });
+
+    const result = extractFromDom();
+
+    expect(result.status).toBe("failed");
+    expect(result.platform).toBe("x");
+    expect(result.type).toBe("social-media");
+  });
+
+  it("extractFromDom returns failed for 'This post is from a suspended account'", () => {
+    document.body.innerHTML =
+      "<div>Caution: This post is from a suspended account.</div>";
+    Object.defineProperty(document.body, "innerText", {
+      value: "Caution: This post is from a suspended account.",
+      writable: true,
+      configurable: true,
+    });
+
+    const result = extractFromDom();
+
+    expect(result.status).toBe("failed");
+    expect(result.platform).toBe("x");
+    expect(result.content).toContain("suspended account");
+  });
+
+  it("extractFromDom returns failed when page has rate limit message", () => {
+    const rateLimitText =
+      "You have exceeded the rate limit. Please wait a few minutes before retrying.";
+    document.body.innerHTML = `<div>${rateLimitText}</div>`;
+    Object.defineProperty(document.body, "innerText", {
+      value: rateLimitText,
+      writable: true,
+      configurable: true,
+    });
+
+    const result = extractFromDom();
+
+    expect(result.status).toBe("failed");
+    expect(result.platform).toBe("x");
+    expect(result.content).toContain("rate limit");
+  });
+
+  it("extractFromDom captures error page body text in fallback content field", () => {
+    const errorPageText = "Something went wrong. Try reloading.";
+    document.body.innerHTML = `<div>${errorPageText}</div>`;
+    Object.defineProperty(document.body, "innerText", {
+      value: errorPageText,
+      writable: true,
+      configurable: true,
+    });
+
+    const result = extractFromDom();
+
+    expect(result.content).toContain("Something went wrong");
+    expect(result.title).toBe("X Post");
+    expect(result.author).toBeNull();
+    expect(result.datePublished).toBeNull();
+  });
+
+  it("fallbackExtraction with 'Something went wrong' body text marks status failed", () => {
+    const errorPageText =
+      "Something went wrong. Try reloading. Don't worry, it's not your fault.";
+    Object.defineProperty(document.body, "innerText", {
+      value: errorPageText,
+      writable: true,
+      configurable: true,
+    });
+
+    const result = fallbackExtraction(
+      "https://x.com/user/status/999",
+      "No tweet article found on page"
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.content).toContain("Something went wrong");
+    expect(result.error).toContain("No tweet article found on page");
   });
 });

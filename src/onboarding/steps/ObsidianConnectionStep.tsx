@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import type { FormEvent } from "react";
 import {
   IoEye,
   IoEyeOff,
@@ -21,20 +22,14 @@ interface Props {
   onValidChange: (valid: boolean) => void;
 }
 
-function categorizeVaultError(err: VaultClientError, url: string): string {
-  if (err.statusCode === 401) {
-    return "API key doesn't match. In Obsidian: Settings > Local REST API > copy the key shown there.";
-  }
-  if (err.message.includes("Network error") && url.startsWith("https://")) {
-    return (
-      "Could not reach Obsidian. Make sure: 1) Obsidian is open, 2) Local REST API plugin is installed and enabled. " +
-      `You may need to accept the certificate: open ${url} in a new tab and click Advanced > Proceed.`
-    );
+function categorizeVaultError(err: VaultClientError): string {
+  if (err.statusCode === 401 || err.message.includes("authentication failed")) {
+    return "Authentication failed: API key doesn't match. In Obsidian: Settings > Local REST API > copy the exact key shown there.";
   }
   if (err.message.includes("Network error")) {
     return "Could not reach Obsidian. Make sure: 1) Obsidian is open, 2) Local REST API plugin is installed, enabled, and toggled on.";
   }
-  return `Connection failed: ${err.message}. Try switching between HTTP and HTTPS in Advanced settings below.`;
+  return `Connection failed: ${err.message}`;
 }
 
 export function ObsidianConnectionStep({
@@ -48,13 +43,21 @@ export function ObsidianConnectionStep({
     useState<ConnectionStatus>("idle");
   const [connectionError, setConnectionError] = useState<string>();
   const [checkedSteps, setCheckedSteps] = useState<Set<SubStepId>>(new Set());
-  const [showUrlConfig, setShowUrlConfig] = useState(false);
+  const [step3Completed, setStep3Completed] = useState(
+    data.vaultApiKey.length >= 5
+  );
   const [obsidianDetected, setObsidianDetected] = useState(false);
+  const [expandedStep, setExpandedStep] = useState<SubStepId | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
-  const [vaultUrlPreset, setVaultUrlPreset] = useState<string>(() => {
-    const match = VAULT_URL_PRESETS.find((p) => p.value === data.vaultUrl);
-    return match ? match.value : "custom";
-  });
+  // Fixed URL - no presets needed since we only support HTTP
+  const vaultUrl = DEFAULT_VAULT_URL;
+
+  // Ensure vault URL is set to default on mount
+  useEffect(() => {
+    if (data.vaultUrl !== DEFAULT_VAULT_URL) {
+      onUpdate({ vaultUrl: DEFAULT_VAULT_URL });
+    }
+  }, []); // Only run on mount
 
   // Determine which steps are completed
   const isStepCompleted = useCallback(
@@ -64,22 +67,32 @@ export function ObsidianConnectionStep({
         case 2:
           return checkedSteps.has(step);
         case 3:
-          return data.vaultApiKey.length >= 5;
+          return step3Completed;
         case 4:
           return connectionStatus === "success";
       }
     },
-    [checkedSteps, data.vaultApiKey, connectionStatus]
+    [checkedSteps, step3Completed, connectionStatus]
   );
 
   // Active step = first uncompleted step
-  const activeStep: SubStepId = isStepCompleted(1)
+  const computedActiveStep: SubStepId = isStepCompleted(1)
     ? isStepCompleted(2)
       ? isStepCompleted(3)
         ? 4
         : 3
       : 2
     : 1;
+
+  // Allow manually expanding a completed step to edit it
+  const activeStep = expandedStep ?? computedActiveStep;
+
+  // Clear expandedStep when it matches the computed step (no longer an override)
+  useEffect(() => {
+    if (expandedStep !== null && expandedStep === computedActiveStep) {
+      setExpandedStep(null);
+    }
+  }, [expandedStep, computedActiveStep]);
 
   // Auto-detect Obsidian connection by polling GET / (unauthenticated)
   useEffect(() => {
@@ -121,21 +134,32 @@ export function ObsidianConnectionStep({
 
     const client = new VaultClient(data.vaultUrl, data.vaultApiKey);
     try {
-      const healthy = await client.testConnection();
-      if (healthy) {
+      const result = await client.testConnection();
+      if (result.ok && result.authenticated) {
         setConnectionStatus("success");
         onValidChange(true);
-      } else {
+      } else if (result.ok && !result.authenticated) {
         setConnectionStatus("error");
         setConnectionError(
-          "Connected but authentication failed. Check your API key."
+          "Connected but authentication failed. Check your API key in Obsidian: Settings > Local REST API."
         );
+        onValidChange(false);
+      } else {
+        // result.ok is false - show the error message
+        setConnectionStatus("error");
+        const errorMsg = ("error" in result && result.error) || "Could not connect to Obsidian";
+        // Show clearer message for authentication failures
+        if (errorMsg.includes("authentication failed") || errorMsg.includes("API key")) {
+          setConnectionError("Authentication failed: Wrong API key. In Obsidian: Settings > Local REST API > copy the exact key.");
+        } else {
+          setConnectionError(errorMsg);
+        }
         onValidChange(false);
       }
     } catch (err) {
       setConnectionStatus("error");
       if (err instanceof VaultClientError) {
-        setConnectionError(categorizeVaultError(err, data.vaultUrl));
+        setConnectionError(categorizeVaultError(err));
       } else {
         setConnectionError(
           err instanceof Error ? err.message : "Connection failed"
@@ -157,6 +181,18 @@ export function ObsidianConnectionStep({
     });
   };
 
+  const handleStep3Done = useCallback(
+    (e: FormEvent) => {
+      e.preventDefault();
+      const result = validateVaultApiKey(data.vaultApiKey);
+      setApiKeyError(result.error);
+      if (!result.valid || !data.vaultApiKey) return;
+      setStep3Completed(true);
+      setExpandedStep(null);
+    },
+    [data.vaultApiKey]
+  );
+
   const renderStepBadge = (step: SubStepId) => {
     if (isStepCompleted(step)) {
       return (
@@ -175,6 +211,7 @@ export function ObsidianConnectionStep({
   };
 
   const getStepState = (step: SubStepId) => {
+    if (step === expandedStep) return "active";
     if (isStepCompleted(step)) return "completed";
     if (step === activeStep) return "active";
     return "pending";
@@ -198,7 +235,9 @@ export function ObsidianConnectionStep({
             type="button"
             className="sub-step-header"
             onClick={() => {
-              if (activeStep === 1) toggleManualStep(1);
+              if (expandedStep === 1) setExpandedStep(null);
+              else if (activeStep === 1) toggleManualStep(1);
+              else if (isStepCompleted(1)) setExpandedStep(1);
             }}
             disabled={getStepState(1) === "pending"}
           >
@@ -208,7 +247,7 @@ export function ObsidianConnectionStep({
               <span className="sub-step-check-indicator" />
             )}
           </button>
-          {activeStep === 1 && !isStepCompleted(1) && (
+          {activeStep === 1 && (
             <div className="sub-step-body">
               <p>Make sure Obsidian is running with your vault open.</p>
               <div className="sub-step-actions">
@@ -239,7 +278,9 @@ export function ObsidianConnectionStep({
             type="button"
             className="sub-step-header"
             onClick={() => {
-              if (activeStep === 2) toggleManualStep(2);
+              if (expandedStep === 2) setExpandedStep(null);
+              else if (activeStep === 2) toggleManualStep(2);
+              else if (isStepCompleted(2)) setExpandedStep(2);
             }}
             disabled={getStepState(2) === "pending"}
           >
@@ -248,7 +289,7 @@ export function ObsidianConnectionStep({
               Install the Local REST API plugin
             </span>
           </button>
-          {activeStep === 2 && !isStepCompleted(2) && (
+          {activeStep === 2 && (
             <div className="sub-step-body">
               <p>
                 This plugin lets 2Vault communicate with your vault.
@@ -283,46 +324,62 @@ export function ObsidianConnectionStep({
           <button
             type="button"
             className="sub-step-header"
+            onClick={() => {
+              if (expandedStep === 3) setExpandedStep(null);
+              else if (isStepCompleted(3)) setExpandedStep(3);
+            }}
             disabled={getStepState(3) === "pending"}
           >
             {renderStepBadge(3)}
             <span className="sub-step-title">Copy your API key</span>
           </button>
-          {activeStep === 3 && !isStepCompleted(3) && (
+          {activeStep === 3 && (
             <div className="sub-step-body">
               <p>
                 In Obsidian: Settings &gt; Local REST API. Copy the API key.
               </p>
-              <div className="form-group">
-                <label htmlFor="vaultApiKey">API Key</label>
-                <div className="input-with-toggle">
-                  <input
-                    id="vaultApiKey"
-                    type={showApiKey ? "text" : "password"}
-                    value={data.vaultApiKey}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      onUpdate({ vaultApiKey: val });
-                      const result = validateVaultApiKey(val);
-                      setApiKeyError(result.error);
-                      setConnectionStatus("idle");
-                      onValidChange(false);
-                    }}
-                    placeholder="Paste your API key here"
-                  />
+              <form onSubmit={handleStep3Done}>
+                <div className="form-group">
+                  <label htmlFor="vaultApiKey">API Key</label>
+                  <div className="input-with-toggle">
+                    <input
+                      id="vaultApiKey"
+                      type={showApiKey ? "text" : "password"}
+                      value={data.vaultApiKey}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        onUpdate({ vaultApiKey: val });
+                        setStep3Completed(false);
+                        const result = validateVaultApiKey(val);
+                        setApiKeyError(result.error);
+                        setConnectionStatus("idle");
+                        onValidChange(false);
+                      }}
+                      placeholder="Paste your API key here"
+                    />
+                    <button
+                      type="button"
+                      className="toggle-visibility"
+                      onClick={() => setShowApiKey((v) => !v)}
+                      aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                    >
+                      {showApiKey ? <IoEyeOff /> : <IoEye />}
+                    </button>
+                  </div>
+                  {apiKeyError && (
+                    <span className="form-error">{apiKeyError}</span>
+                  )}
+                </div>
+                <div className="sub-step-actions" style={{ marginTop: '6px' }}>
                   <button
-                    type="button"
-                    className="toggle-visibility"
-                    onClick={() => setShowApiKey((v) => !v)}
-                    aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                    type="submit"
+                    className="btn btn-primary btn-sm"
+                    disabled={!data.vaultApiKey || !!apiKeyError}
                   >
-                    {showApiKey ? <IoEyeOff /> : <IoEye />}
+                    Done
                   </button>
                 </div>
-                {apiKeyError && (
-                  <span className="form-error">{apiKeyError}</span>
-                )}
-              </div>
+              </form>
             </div>
           )}
         </li>
@@ -364,67 +421,16 @@ export function ObsidianConnectionStep({
               {connectionStatus === "error" && connectionError && (
                 <div className="error-guidance">
                   <p>{connectionError}</p>
-                  {connectionError.includes("certificate") && (
-                    <a
-                      href={data.vaultUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn btn-secondary btn-sm"
-                    >
-                      Open vault URL to accept certificate
-                    </a>
-                  )}
                 </div>
               )}
 
-              <button
-                type="button"
-                className="url-config-toggle"
-                onClick={() => setShowUrlConfig((v) => !v)}
-              >
-                {showUrlConfig ? <IoChevronUp /> : <IoChevronDown />}
-                <span>Advanced: change URL</span>
-              </button>
-
-              {showUrlConfig && (
-                <div className="form-group">
-                  <label htmlFor="vaultUrlPreset">Vault URL</label>
-                  <select
-                    id="vaultUrlPreset"
-                    value={vaultUrlPreset}
-                    onChange={(e) => {
-                      const selected = e.target.value;
-                      setVaultUrlPreset(selected);
-                      if (selected !== "custom") {
-                        onUpdate({ vaultUrl: selected });
-                      }
-                      setConnectionStatus("idle");
-                      setObsidianDetected(false);
-                      onValidChange(false);
-                    }}
-                  >
-                    {VAULT_URL_PRESETS.map((preset) => (
-                      <option key={preset.value} value={preset.value}>
-                        {preset.label}
-                      </option>
-                    ))}
-                  </select>
-                  {vaultUrlPreset === "custom" && (
-                    <input
-                      id="vaultUrl"
-                      type="text"
-                      value={data.vaultUrl}
-                      onChange={(e) => {
-                        onUpdate({ vaultUrl: e.target.value });
-                        setConnectionStatus("idle");
-                        setObsidianDetected(false);
-                        onValidChange(false);
-                      }}
-                      placeholder="http://your-obsidian-url:port"
-                    />
-                  )}
-                </div>
-              )}
+              <div className="vault-url-display">
+                <label>Vault URL</label>
+                <code>{vaultUrl}</code>
+                <p className="sub-step-hint" style={{ marginTop: '8px' }}>
+                  Using HTTP (port 27123). HTTPS not supported in Chrome extensions with self-signed certificates.
+                </p>
+              </div>
             </div>
           )}
         </li>

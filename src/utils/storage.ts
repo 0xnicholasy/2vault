@@ -1,12 +1,12 @@
 import type { Config, VaultContext, VaultOrganization, TagGroup, ProcessingResult, SummaryDetailLevel } from "@/core/types.ts";
 import type { ProcessingState } from "@/background/messages.ts";
+import { DEFAULT_VAULT_URL } from "@/utils/config";
 
 interface SyncStorage {
   apiKey: string;
   llmProvider: "openrouter";
   vaultUrl: string;
   vaultApiKey: string;
-  defaultFolder: string;
   vaultName: string;
   vaultOrganization: VaultOrganization;
   tagGroups: TagGroup[];
@@ -52,13 +52,12 @@ export async function setLocalStorage<K extends keyof LocalStorage>(
 }
 
 export async function getConfig(): Promise<Config> {
-  const [apiKey, llmProvider, vaultUrl, vaultApiKey, defaultFolder, vaultName, vaultOrganization, tagGroups, summaryDetailLevel] =
+  const [apiKey, llmProvider, vaultUrl, vaultApiKey, vaultName, vaultOrganization, tagGroups, summaryDetailLevel] =
     await Promise.all([
       getSyncStorage("apiKey"),
       getSyncStorage("llmProvider"),
       getSyncStorage("vaultUrl"),
       getSyncStorage("vaultApiKey"),
-      getSyncStorage("defaultFolder"),
       getSyncStorage("vaultName"),
       getSyncStorage("vaultOrganization"),
       getSyncStorage("tagGroups"),
@@ -68,9 +67,8 @@ export async function getConfig(): Promise<Config> {
   return {
     apiKey: apiKey ?? "",
     llmProvider: llmProvider ?? "openrouter",
-    vaultUrl: vaultUrl ?? "https://localhost:27124",
+    vaultUrl: vaultUrl ?? DEFAULT_VAULT_URL,
     vaultApiKey: vaultApiKey ?? "",
-    defaultFolder: defaultFolder ?? "Inbox",
     vaultName: vaultName ?? "",
     vaultOrganization: vaultOrganization ?? "para",
     tagGroups: tagGroups ?? [],

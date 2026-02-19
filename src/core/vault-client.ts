@@ -144,12 +144,38 @@ export class VaultClient {
     return await response.text();
   }
 
-  async testConnection(): Promise<boolean> {
+  async testConnection(): Promise<
+    | { ok: true; authenticated: boolean }
+    | { ok: false; error?: string }
+  > {
     try {
+      // Step 1: Health check
       const health = await this.request<VaultHealthResponse>("GET", "/");
-      return health.status === "OK" && health.authenticated === true;
-    } catch {
-      return false;
+      if (health.status !== "OK") {
+        return { ok: false, error: "Health check returned non-OK status" };
+      }
+
+      // Step 2: Verify actual vault access with a real operation
+      // Use searchNotes with a test query - requires authentication
+      try {
+        await this.searchNotes("test-connection-2vault");
+        // If search succeeds, auth is working
+        return { ok: true, authenticated: true };
+      } catch (searchErr) {
+        // If search fails with 401, auth is definitely broken
+        if (searchErr instanceof VaultClientError && searchErr.statusCode === 401) {
+          return { ok: false, error: "API key authentication failed. Check your vault API key." };
+        }
+        // For other errors (404, network), check health.authenticated
+        if (health.authenticated === true) {
+          return { ok: true, authenticated: true };
+        }
+        return { ok: false, error: "Could not verify vault access" };
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("[VaultClient] testConnection failed:", err);
+      return { ok: false, error: message };
     }
   }
 
@@ -158,9 +184,9 @@ export class VaultClient {
     try {
       rootListing = await this.request<VaultListResponse>("GET", "/vault/");
     } catch (err) {
-      // v3.4.3 bug: GET /vault/ returns 404 on HTTP endpoint.
+      // v3.4.3 bug: GET /vault/ returns 404 or 401 on HTTP endpoint (works on HTTPS).
       // Fall back to empty folder list - notes will use defaultFolder.
-      if (err instanceof VaultClientError && err.statusCode === 404) {
+      if (err instanceof VaultClientError && (err.statusCode === 404 || err.statusCode === 401)) {
         return [];
       }
       throw err;

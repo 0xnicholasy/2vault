@@ -5,12 +5,15 @@ export type UrlStatus =
   | "queued"
   | "checking"
   | "extracting"
+  | "retrying"
   | "processing"
   | "creating"
   | "done"
   | "failed"
   | "skipped"
-  | "review";
+  | "review"
+  | "timeout"
+  | "cancelled";
 
 /** Persisted processing state in chrome.storage.local */
 export interface ProcessingState {

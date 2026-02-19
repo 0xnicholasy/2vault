@@ -12,13 +12,15 @@ interface ProcessingStatusProps {
 export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatusProps) {
   const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
 
-  const TERMINAL_STATUSES = new Set(["done", "failed", "skipped", "review"]);
+  const TERMINAL_STATUSES = new Set(["done", "failed", "skipped", "review", "timeout", "cancelled"]);
   const total = state.urls.length;
   const completed = state.urls.filter((url) => TERMINAL_STATUSES.has(state.urlStatuses[url] ?? "queued")).length;
   const successCount = state.urls.filter((url) => state.urlStatuses[url] === "done").length;
   const reviewCount = state.urls.filter((url) => state.urlStatuses[url] === "review").length;
   const failedCount = state.urls.filter((url) => state.urlStatuses[url] === "failed").length;
+  const timeoutCount = state.urls.filter((url) => state.urlStatuses[url] === "timeout").length;
   const skippedCount = state.urls.filter((url) => state.urlStatuses[url] === "skipped").length;
+  const cancelledCount = state.urls.filter((url) => state.urlStatuses[url] === "cancelled").length;
   const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
   const isDone = !state.active;
 
@@ -37,7 +39,7 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
   return (
     <div className="processing-status">
       <h3 className="processing-status-title">
-        {isDone ? "Processing Complete" : "Processing Bookmarks..."}
+        {isDone ? (state.cancelled ? "Processing Cancelled" : "Processing Complete") : "Processing Bookmarks..."}
       </h3>
 
       {state.error && (
@@ -57,7 +59,7 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
           {completed} / {total} URLs
           {isDone && (
             <span className="progress-summary">
-              {" "}- {successCount} saved{reviewCount > 0 ? `, ${reviewCount} needs review` : ""}, {failedCount} failed{skippedCount > 0 ? `, ${skippedCount} skipped` : ""}
+              {" "}- {successCount} saved{reviewCount > 0 ? `, ${reviewCount} saved (needs review)` : ""}{timeoutCount > 0 ? `, ${timeoutCount} timed out` : ""}{failedCount > 0 ? `, ${failedCount} failed` : ""}{skippedCount > 0 ? `, ${skippedCount} skipped` : ""}{cancelledCount > 0 ? `, ${cancelledCount} cancelled` : ""}
             </span>
           )}
         </div>
@@ -67,7 +69,7 @@ export function ProcessingStatus({ state, vaultName, onCancel }: ProcessingStatu
         {state.urls.map((url, index) => {
           const status = getUrlStatus(url, state);
           const result = state.results.find((r) => r.url === url);
-          const hasError = result?.status === "failed" && result.error;
+          const hasError = (result?.status === "failed" || result?.status === "timeout") && result.error;
           const isExpanded = expandedErrors.has(url);
           const isSuccess = result?.status === "success" || result?.status === "review";
 
