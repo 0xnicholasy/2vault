@@ -29,6 +29,8 @@ bun run validate     # Process URLs from scripts/urls.txt through full pipeline
 
 **Verification workflow:** Use `bun run typecheck` after changes. Load `dist/` as unpacked extension in `chrome://extensions` for manual testing.
 
+**Build workflow:** Run `bun run build` before E2E tests, manual testing in `chrome://extensions`, or deployment - these require the built `dist/` directory.
+
 ## Architecture
 
 The project has two layers:
@@ -239,13 +241,29 @@ chrome.tabs.sendMessage(tabId, { type: 'EXTRACT_CONTENT' });
 
 ## Testing
 
-### Unit Tests (Vitest)
+**Every code change MUST include corresponding test updates.** See parent `CLAUDE.md` for full testing policy.
 
-Test `src/core/` modules with mocked dependencies:
+### Test Structure
+
+- **Unit tests** (`tests/unit/`): Test modules in isolation with mocked dependencies
+- **Integration tests** (`tests/integration/`): Test cross-module interactions (e.g., service worker + orchestrator)
+- **E2E tests** (`tests/e2e/`): Test full user flows for user-facing changes
+
+### Three-Direction Coverage (required for all new features)
+
+1. **Happy path**: Normal workflow with valid inputs
+2. **Expected failures**: Invalid inputs, network errors, missing API keys, auth failures
+3. **Edge/marginal cases**: Empty inputs, race conditions, concurrent processing, timeouts, special characters
+
+### Existing Test Files
+
 - `extractor.test.ts` - HTML fixtures -> expected markdown
 - `processor.test.ts` - mock LLM responses -> expected ProcessedNote
 - `note-formatter.test.ts` - ProcessedNote -> expected markdown string
 - `vault-client.test.ts` - mock HTTP responses
+- `orchestrator.test.ts` - Pipeline processing, cancellation, parallel execution
+- `service-worker.test.ts` - Service worker message handling, tab management
+- `extension-flow.test.ts` - Integration: full bookmark processing flow
 
 ### Test Fixtures
 
@@ -255,6 +273,50 @@ tests/fixtures/
 ├── expected/      # Expected markdown output
 └── vault/         # Mock vault folder structure
 ```
+
+### Test Commands
+
+```bash
+bun run test         # All unit + integration tests (Vitest)
+bun run test:watch   # Watch mode for development
+bun run test:e2e     # E2E tests (Playwright) - requires `bun run build` first
+bun run test:e2e:headed  # E2E tests with visible browser
+```
+
+### When to Run E2E Tests
+
+**ALWAYS run E2E tests for:**
+- User-facing UI changes (popup, onboarding wizard, settings page)
+- User flow changes (bookmark processing, keyboard shortcuts, content script interactions)
+- Extension lifecycle changes (service worker, installation, update flows)
+- Before any release or deployment
+- Changes to critical paths (content extraction, vault integration, LLM processing)
+
+**Unit/integration tests sufficient for:**
+- Internal refactors with no behavior change
+- Pure function changes in core modules
+- Type-only changes
+- Documentation updates
+- Minor bug fixes in isolated utility functions
+- Adding new internal helper functions
+
+**Use judgment for:**
+- Error handling changes → E2E if user-visible errors; skip if internal logging only
+- State management changes → E2E if affects UI state; skip if internal cache/storage only
+- API client changes → E2E if changes user interaction patterns; skip if internal optimization
+
+### Test Agents (use proactively after every code change)
+
+| Agent | Responsibility | When to Use |
+|-------|---------------|-------------|
+| `test-generator` | Generate tests from code diffs | After writing new code -- creates unit/integration tests |
+| `test-runner` | Run tests and diagnose failures | After writing tests -- executes, finds root causes, suggests fixes |
+| `playwright-tester` | E2E browser tests | After UI changes -- popup flows, content scripts, onboarding |
+| `test-engineer` | Test strategy and automation | Complex sprints needing test infrastructure or coverage planning |
+
+**Workflow**: Code change -> `test-generator` -> `test-runner` -> `playwright-tester` (if user-facing)
+
+See `tasks/test-coverage-gaps.md` for comprehensive gap analysis with ~115 specific missing test cases.
 
 ### Manual Testing
 
