@@ -1,7 +1,14 @@
-import { StrictMode, useState, useEffect, useCallback } from "react";
+import { StrictMode, useState, useEffect, useCallback, useRef } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { IoSettingsSharp, IoBookmarks, IoStatsChart } from "react-icons/io5";
+import {
+  IoSettingsSharp,
+  IoBookmarks,
+  IoStatsChart,
+  IoInformationCircleOutline,
+  IoGlobeOutline,
+  IoLogoGithub,
+} from "react-icons/io5";
 import type { ProcessingState } from "@/background/messages.ts";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Settings } from "./components/Settings";
@@ -32,6 +39,31 @@ function App() {
   const [processingState, setProcessingState] = useState<ProcessingState | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [initialUrl, setInitialUrl] = useState<string | undefined>();
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const aboutRef = useRef<HTMLDivElement>(null);
+  const aboutBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Close about dropdown on click outside or Escape
+  useEffect(() => {
+    if (!aboutOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        !aboutRef.current?.contains(e.target as Node) &&
+        !aboutBtnRef.current?.contains(e.target as Node)
+      ) {
+        setAboutOpen(false);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAboutOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [aboutOpen]);
 
   // Redirect first-time users to onboarding
   useEffect(() => {
@@ -127,6 +159,51 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>2Vault</h1>
+        <div className="about-wrapper">
+          <button
+            ref={aboutBtnRef}
+            className="about-button"
+            onClick={() => setAboutOpen((v) => !v)}
+            aria-label="About 2Vault"
+            aria-expanded={aboutOpen}
+            aria-haspopup="menu"
+          >
+            <IoInformationCircleOutline />
+          </button>
+          {aboutOpen && (
+            <div ref={aboutRef} className="about-dropdown" role="menu">
+              <a
+                href="https://www.2vault.dev/"
+                className="about-dropdown-link"
+                role="menuitem"
+                onClick={(e) => {
+                  e.preventDefault();
+                  chrome.tabs.create({ url: "https://www.2vault.dev/" });
+                }}
+              >
+                <IoGlobeOutline />
+                <span>Visit 2Vault Website</span>
+              </a>
+              <div className="about-dropdown-divider" />
+              <a
+                href="https://github.com/0xnicholasy/2vault"
+                className="about-dropdown-link"
+                role="menuitem"
+                onClick={(e) => {
+                  e.preventDefault();
+                  chrome.tabs.create({ url: "https://github.com/0xnicholasy/2vault" });
+                }}
+              >
+                <IoLogoGithub />
+                <span>View on GitHub</span>
+              </a>
+              <div className="about-dropdown-divider" />
+              <div className="about-dropdown-footer">
+                Built by <strong>0xnicholasy</strong>
+              </div>
+            </div>
+          )}
+        </div>
       </header>
 
       <nav className="tab-nav">
