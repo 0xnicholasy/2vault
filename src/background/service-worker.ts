@@ -1,6 +1,6 @@
 import type { ProcessingState, UrlStatus, ExtractionResultMessage } from "@/background/messages.ts";
 import type { ExtractedContent, ProcessingResult } from "@/core/types.ts";
-import { processUrls, createDefaultProvider } from "@/core/orchestrator";
+import { processUrls, createDefaultProvider, normalizeUrl } from "@/core/orchestrator";
 import { fetchAndExtract, createFailedExtraction } from "@/core/extractor";
 import {
   getConfig,
@@ -410,7 +410,6 @@ async function runBatchProcessing(urls: string[]): Promise<void> {
   abortPreload = false; // Reset abort flag for new batch
 
   // Normalize URLs before processing to prevent duplicate tabs (old.reddit.com vs reddit.com)
-  const { normalizeUrl } = await import("@/core/orchestrator");
   const normalizedUrls = urls.map(normalizeUrl);
 
   // Pre-open tabs for social media URLs so pages start loading immediately

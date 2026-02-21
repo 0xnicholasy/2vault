@@ -145,25 +145,29 @@ function App() {
         ))}
       </nav>
 
-      <main className="tab-content">
+      <div className={`tab-content ${activeTab === "settings" ? "" : "tab-hidden"}`}>
         <ErrorBoundary>
-          {activeTab === "settings" && <Settings />}
-          {activeTab === "bookmarks" && (
-            <BookmarkBrowser
-              onProcess={handleStartProcessing}
-              processing={isProcessing}
-              initialUrl={initialUrl}
-            />
-          )}
-          {activeTab === "status" && (
-            <StatusTab
-              processingState={processingState}
-              onProcess={handleStartProcessing}
-              onSwitchTab={handleSwitchTab}
-            />
-          )}
+          <Settings />
         </ErrorBoundary>
-      </main>
+      </div>
+      <div className={`tab-content ${activeTab === "bookmarks" ? "" : "tab-hidden"}`}>
+        <ErrorBoundary>
+          <BookmarkBrowser
+            onProcess={handleStartProcessing}
+            processing={isProcessing}
+            initialUrl={initialUrl}
+          />
+        </ErrorBoundary>
+      </div>
+      <div className={`tab-content ${activeTab === "status" ? "" : "tab-hidden"}`}>
+        <ErrorBoundary>
+          <StatusTab
+            processingState={processingState}
+            onProcess={handleStartProcessing}
+            onSwitchTab={handleSwitchTab}
+          />
+        </ErrorBoundary>
+      </div>
 
       {showModal && processingState && (
         <ProcessingModal

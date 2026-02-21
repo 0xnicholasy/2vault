@@ -120,6 +120,16 @@ function FolderNode({
 
       {expanded && (
         <div className="folder-contents">
+          {folder.children.map((child) => (
+            <FolderNode
+              key={child.id}
+              folder={child}
+              selectedUrls={selectedUrls}
+              onToggleUrl={onToggleUrl}
+              onProcessFolder={onProcessFolder}
+              processing={processing}
+            />
+          ))}
           {folder.urls.map((bookmark) => (
             <label key={bookmark.id} className="bookmark-item">
               <input
@@ -132,16 +142,6 @@ function FolderNode({
                 {bookmark.title}
               </span>
             </label>
-          ))}
-          {folder.children.map((child) => (
-            <FolderNode
-              key={child.id}
-              folder={child}
-              selectedUrls={selectedUrls}
-              onToggleUrl={onToggleUrl}
-              onProcessFolder={onProcessFolder}
-              processing={processing}
-            />
           ))}
         </div>
       )}
@@ -172,7 +172,33 @@ export function BookmarkBrowser({
   useEffect(() => {
     chrome.bookmarks.getTree().then((tree) => {
       const root = tree[0]?.children ?? [];
-      setFolders(buildTree(root));
+      const allFolders = buildTree(root);
+
+      // In testing mode, only show imported bookmarks for clean demo screenshots
+      if (import.meta.env.VITE_TESTING === "true") {
+        const findFolder = (
+          folders: BookmarkFolder[],
+          title: string
+        ): BookmarkFolder | undefined => {
+          for (const f of folders) {
+            if (f.title === title) return f;
+            const found = findFolder(f.children, title);
+            if (found) return found;
+          }
+          return undefined;
+        };
+        const imported = findFolder(allFolders, "Imported");
+        const importedBar = imported?.children.find(
+          (f) =>
+            f.title.toLowerCase() === "bookmarks bar" ||
+            f.title.toLowerCase() === "bookmarks"
+        );
+        const demoFolders = importedBar?.children ?? imported?.children ?? [];
+        setFolders(demoFolders);
+      } else {
+        setFolders(allFolders);
+      }
+
       setLoading(false);
     });
   }, []);

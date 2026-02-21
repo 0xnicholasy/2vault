@@ -288,11 +288,10 @@ export function Settings() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
           <label>Tag Groups</label>
           <a
-            href="https://2vault.dev/#tag-groups"
+            href="https://2vault.dev/features/tag-groups"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-primary hover:text-primary-hover"
-            style={{ fontSize: '13px', textDecoration: 'none' }}
+            style={{ fontSize: '13px', textDecoration: 'none', color: 'var(--ctp-mauve)' }}
           >
             Learn more →
           </a>
