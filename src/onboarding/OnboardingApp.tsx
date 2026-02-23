@@ -3,6 +3,7 @@ import { useOnboardingState } from "./hooks/useOnboardingState";
 import { ObsidianConnectionStep } from "./steps/ObsidianConnectionStep";
 import { OpenRouterStep } from "./steps/OpenRouterStep";
 import { CompletionStep } from "./steps/CompletionStep";
+import headerLogo from "@/../icons/header-logo.png";
 
 const STEP_LABELS = ["Obsidian", "AI Key", "Done"];
 
@@ -56,7 +57,8 @@ export function OnboardingApp() {
   return (
     <div className="onboarding-container">
       <header className="onboarding-header">
-        <h1>2Vault Onboarding</h1>
+        <img src={headerLogo} alt="2Vault" style={{ height: 32, margin: "0 auto 8px" }} />
+        <p className="onboarding-subtitle" style={{ marginTop: 0 }}>Onboarding</p>
       </header>
 
       <div className="progress-steps">

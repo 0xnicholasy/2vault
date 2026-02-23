@@ -9,6 +9,7 @@ import {
   IoGlobeOutline,
   IoLogoGithub,
 } from "react-icons/io5";
+import headerLogo from "@/../icons/header-logo.png";
 import type { ProcessingState } from "@/background/messages.ts";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Settings } from "./components/Settings";
@@ -158,7 +159,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>2Vault</h1>
+        <img src={headerLogo} alt="2Vault" style={{ height: 20 }} />
         <div className="about-wrapper">
           <button
             ref={aboutBtnRef}
